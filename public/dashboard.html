@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#0A1F33" />
+    <meta name="description" content="Panel de monitoreo EcoSentinel — estado del appliance, alertas y estadísticas de tu red en tiempo real." />
+    <title>Dashboard — EcoSentinel</title>
+
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="css/styles.css" />
+  </head>
+  <body class="dash-body">
+    <!-- HEADER -->
+    <header class="dash-header">
+      <div class="container nav-inner">
+        <a href="index.html" class="brand" aria-label="EcoSentinel inicio">
+          <span class="brand-mark" aria-hidden="true">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2 4 5v6c0 5 3.5 8.5 8 11 4.5-2.5 8-6 8-11V5l-8-3Z"/><path d="m9 12 2 2 4-4"/></svg>
+          </span>
+          ECOSENTINEL
+        </a>
+        <div class="dash-user">
+          <div class="user-meta">
+            <div class="user-name" id="userName">Mi Empresa</div>
+            <div class="user-plan" id="userPlan">Plan Pro</div>
+          </div>
+          <button class="btn btn-outline-dark" id="logoutBtn">Cerrar sesión</button>
+        </div>
+      </div>
+    </header>
+
+    <main class="dash-main">
+      <div class="container">
+        <div class="dash-title-row">
+          <h1>Estado de tu red</h1>
+          <span class="status-pill online" id="statusPill">
+            <span class="dot"></span> Appliance conectado
+          </span>
+        </div>
+
+        <!-- ESTADÍSTICAS -->
+        <div class="stat-grid">
+          <div class="stat-card">
+            <div class="stat-top">
+              <span class="stat-label">Paquetes analizados</span>
+              <span class="stat-icon navy" aria-hidden="true">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+              </span>
+            </div>
+            <div class="stat-value" id="statPackets">0</div>
+            <div class="stat-trend">30 features por muestra</div>
+          </div>
+
+          <div class="stat-card">
+            <div class="stat-top">
+              <span class="stat-label">Ataques detectados</span>
+              <span class="stat-icon coral" aria-hidden="true">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z"/><path d="M12 9v4M12 17h.01"/></svg>
+              </span>
+            </div>
+            <div class="stat-value" id="statDetected">0</div>
+            <div class="stat-trend">Recall 99.79%</div>
+          </div>
+
+          <div class="stat-card">
+            <div class="stat-top">
+              <span class="stat-label">Ataques bloqueados</span>
+              <span class="stat-icon teal" aria-hidden="true">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2 4 5v6c0 5 3.5 8.5 8 11 4.5-2.5 8-6 8-11V5l-8-3Z"/><path d="m9 12 2 2 4-4"/></svg>
+              </span>
+            </div>
+            <div class="stat-value" id="statBlocked">0</div>
+            <div class="stat-trend">Umbral calibrado en 0.10</div>
+          </div>
+
+          <div class="stat-card">
+            <div class="stat-top">
+              <span class="stat-label">Latencia de inferencia</span>
+              <span class="stat-icon teal" aria-hidden="true">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
+              </span>
+            </div>
+            <div class="stat-value">&lt;0.003<span style="font-size:1rem;color:var(--gray)">ms</span></div>
+            <div class="stat-trend">Procesamiento en el borde</div>
+          </div>
+        </div>
+
+        <!-- COLUMNAS: alertas + gráfico -->
+        <div class="dash-columns">
+          <!-- Feed de alertas -->
+          <div class="panel">
+            <div class="panel-head">
+              <h3>Alertas recientes</h3>
+              <span class="live"><span class="dot"></span> En vivo</span>
+            </div>
+            <div style="overflow-x:auto">
+              <table class="alerts-table">
+                <thead>
+                  <tr>
+                    <th>Hora</th>
+                    <th>IP origen</th>
+                    <th>Tipo de ataque</th>
+                    <th>Probabilidad</th>
+                    <th>Acción</th>
+                  </tr>
+                </thead>
+                <tbody id="alertsBody"><!-- inyectado por dashboard.js --></tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- Gráfico 24h -->
+          <div class="panel chart-panel">
+            <div class="panel-head" style="padding:0 0 16px 0;border:0">
+              <h3>Ataques (últimas 24 h)</h3>
+            </div>
+            <canvas id="dash-chart" aria-label="Gráfico de ataques en las últimas 24 horas"></canvas>
+            <div class="chart-legend">
+              <span><i style="background:var(--coral)"></i> Detectados</span>
+              <span><i style="background:var(--teal)"></i> Bloqueados</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </main>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
+    <script src="js/dashboard.js"></script>
+  </body>
+</html>
