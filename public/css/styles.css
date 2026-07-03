@@ -1,28 +1,27 @@
 /* ============================================================
    EcoSentinel — Estilos globales
-   Paleta obligatoria del proyecto (no modificar):
-   Navy primario #0A1F33 | Navy secundario #0F2940
-   Teal acento #0EA5A6  | Teal claro #5EEAD4
-   Coral/alerta #FF6B4A  | Fondo claro #F7FAFA
-   Gris texto #64748B    | Blanco #FFFFFF
+   Paleta matte premium (no modificar):
+   Gris oscuro 1 #1C1C1E | Gris oscuro 2 #121214
+   Gris claro #E5E5E5    | Gris neutro #A1A1AA
+   Teal acento #0EA5A6  | Coral/alerta #FF6B4A
    ============================================================ */
 
 :root {
-  --navy-1: #0a1f33;
-  --navy-2: #0f2940;
+  --gray-dark-1: #1c1c1e;
+  --gray-dark-2: #121214;
+  --gray-light: #e5e5e5;
+  --gray-neutral: #a1a1aa;
   --teal: #0ea5a6;
   --teal-light: #5eead4;
   --coral: #ff6b4a;
-  --bg-light: #f7fafa;
-  --gray: #64748b;
   --white: #ffffff;
 
   --font-body: "Inter", system-ui, -apple-system, sans-serif;
   --font-head: "Space Grotesk", "Inter", sans-serif;
 
   --radius: 14px;
-  --shadow-sm: 0 4px 14px rgba(10, 31, 51, 0.08);
-  --shadow-md: 0 12px 30px rgba(10, 31, 51, 0.14);
+  --shadow-sm: 0 4px 14px rgba(0, 0, 0, 0.12);
+  --shadow-md: 0 12px 30px rgba(0, 0, 0, 0.18);
   --shadow-teal: 0 0 0 1px rgba(14, 165, 166, 0.5), 0 10px 40px rgba(14, 165, 166, 0.25);
   --maxw: 1200px;
 }
@@ -37,13 +36,14 @@
 }
 
 html {
-  scroll-behavior: smooth;
+  scroll-behavior: auto;
+  background: var(--gray-dark-1);
 }
 
 body {
   font-family: var(--font-body);
-  background-color: var(--bg-light);
-  color: var(--navy-1);
+  background-color: var(--gray-dark-1);
+  color: var(--gray-light);
   line-height: 1.6;
   overflow-x: hidden;
   -webkit-font-smoothing: antialiased;
@@ -132,18 +132,22 @@ svg {
 section {
   position: relative;
   padding: 96px 0;
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 .section-dark {
-  background: var(--navy-1);
-  color: var(--white);
+  background: var(--gray-dark-2);
+  color: var(--gray-light);
 }
 .section-navy2 {
-  background: var(--navy-2);
-  color: var(--white);
+  background: var(--gray-dark-1);
+  color: var(--gray-light);
 }
 .section-light {
-  background: var(--bg-light);
-  color: var(--navy-1);
+  background: var(--gray-dark-1);
+  color: var(--gray-light);
 }
 .section-head {
   text-align: center;
@@ -164,14 +168,15 @@ section {
   font-size: clamp(1.8rem, 4vw, 2.7rem);
   margin-bottom: 16px;
   text-wrap: balance;
+  color: var(--white);
 }
 .section-head p {
-  color: var(--gray);
+  color: var(--gray-neutral);
   font-size: 1.05rem;
 }
 .section-dark .section-head p,
 .section-navy2 .section-head p {
-  color: #a9bccc;
+  color: var(--gray-neutral);
 }
 
 /* ============================================================
@@ -188,11 +193,11 @@ section {
   transition: background 0.3s ease, padding 0.3s ease, box-shadow 0.3s ease;
 }
 .navbar.scrolled {
-  background: rgba(10, 31, 51, 0.85);
+  background: rgba(18, 18, 20, 0.85);
   backdrop-filter: blur(14px);
   -webkit-backdrop-filter: blur(14px);
   padding: 12px 0;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.25);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
 }
 .nav-inner {
   display: flex;
@@ -219,7 +224,7 @@ section {
   list-style: none;
 }
 .nav-links a {
-  color: #d5e2ec;
+  color: var(--gray-light);
   font-size: 0.95rem;
   font-weight: 500;
   position: relative;
@@ -270,7 +275,7 @@ section {
   min-height: 100vh;
   display: flex;
   align-items: center;
-  background: var(--navy-1);
+  background: var(--gray-dark-1);
   color: var(--white);
   overflow: hidden;
   padding: 120px 0 80px;
@@ -286,7 +291,7 @@ section {
   position: absolute;
   inset: 0;
   background: radial-gradient(circle at 70% 30%, rgba(14, 165, 166, 0.12), transparent 55%),
-    linear-gradient(180deg, rgba(10, 31, 51, 0.2) 0%, rgba(10, 31, 51, 0.75) 100%);
+    linear-gradient(180deg, rgba(18, 18, 20, 0.2) 0%, rgba(18, 18, 20, 0.75) 100%);
   z-index: 1;
 }
 .hero-inner {
@@ -325,7 +330,7 @@ section {
 }
 .hero-sub {
   font-size: clamp(1rem, 2.2vw, 1.3rem);
-  color: #b9cad8;
+  color: var(--gray-neutral);
   max-width: 620px;
   margin-bottom: 36px;
 }
@@ -356,7 +361,7 @@ section {
   font-size: 0.85rem;
   letter-spacing: 0.05em;
   text-transform: uppercase;
-  color: #8ba3b5;
+  color: var(--gray-neutral);
 }
 
 /* Char reveal spans */
@@ -378,8 +383,8 @@ section {
   gap: 24px;
 }
 .threat-card {
-  background: var(--white);
-  border: 1px solid rgba(10, 31, 51, 0.07);
+  background: var(--gray-dark-2);
+  border: 1px solid rgba(161, 161, 166, 0.12);
   border-radius: var(--radius);
   padding: 28px;
   box-shadow: var(--shadow-sm);
@@ -395,7 +400,7 @@ section {
   width: 100%;
   height: 150px;
   border-radius: 10px;
-  background: linear-gradient(180deg, #0d2438 0%, #0a1f33 100%);
+  background: linear-gradient(180deg, #252529 0%, #1c1c1e 100%);
   margin-bottom: 22px;
   display: flex;
   align-items: center;
@@ -409,9 +414,10 @@ section {
 .threat-card h3 {
   font-size: 1.25rem;
   margin-bottom: 10px;
+  color: var(--white);
 }
 .threat-card p {
-  color: var(--gray);
+  color: var(--gray-neutral);
   font-size: 0.95rem;
 }
 .threat-tag {
@@ -482,18 +488,18 @@ section {
   width: 68px;
   height: 68px;
   border-radius: 50%;
-  background: var(--navy-1);
+  background: var(--gray-dark-2);
   border: 2px solid rgba(255, 255, 255, 0.18);
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #7d97ab;
+  color: var(--gray-neutral);
   margin-bottom: 16px;
   transition: all 0.4s ease;
 }
 .pnode.active .pdot {
   border-color: var(--teal-light);
-  color: var(--navy-1);
+  color: var(--gray-dark-1);
   background: var(--teal-light);
   box-shadow: 0 0 0 6px rgba(94, 234, 212, 0.15), 0 0 24px rgba(94, 234, 212, 0.4);
 }
@@ -501,12 +507,12 @@ section {
   font-family: var(--font-head);
   font-weight: 600;
   font-size: 0.9rem;
-  color: #cddae4;
+  color: var(--gray-light);
   margin-bottom: 6px;
 }
 .pnode .pdesc {
   font-size: 0.8rem;
-  color: #8ba3b5;
+  color: var(--gray-neutral);
   max-width: 150px;
   opacity: 0;
   transform: translateY(8px);
@@ -519,11 +525,11 @@ section {
    MÉTRICAS DEL MODELO
    ============================================================ */
 .metrics-panel {
-  background: var(--white);
+  background: var(--gray-dark-2);
   border-radius: 20px;
   box-shadow: var(--shadow-md);
   padding: 44px;
-  border: 1px solid rgba(10, 31, 51, 0.06);
+  border: 1px solid rgba(161, 161, 166, 0.12);
 }
 .rings-grid {
   display: grid;
@@ -544,7 +550,7 @@ section {
 }
 .ring .track {
   fill: none;
-  stroke: #e2ecec;
+  stroke: rgba(255, 255, 255, 0.12);
   stroke-width: 12;
 }
 .ring .bar {
@@ -562,12 +568,12 @@ section {
   font-family: var(--font-head);
   font-size: 1.6rem;
   font-weight: 700;
-  color: var(--navy-1);
+  color: var(--white);
 }
 .ring .ring-name {
   margin-top: 6px;
   font-size: 0.9rem;
-  color: var(--gray);
+  color: var(--gray-neutral);
   font-weight: 500;
 }
 .metrics-lower {
@@ -575,7 +581,7 @@ section {
   grid-template-columns: 1fr 1.4fr;
   gap: 40px;
   align-items: center;
-  border-top: 1px solid rgba(10, 31, 51, 0.08);
+  border-top: 1px solid rgba(161, 161, 166, 0.12);
   padding-top: 36px;
 }
 .fn-reduction {
@@ -589,14 +595,14 @@ section {
   line-height: 1;
 }
 .fn-reduction .lbl {
-  color: var(--gray);
+  color: var(--gray-neutral);
   margin-top: 10px;
   font-size: 0.95rem;
 }
 .compare h4 {
   font-size: 1rem;
   margin-bottom: 20px;
-  color: var(--navy-1);
+  color: var(--white);
 }
 .bar-row {
   display: flex;
@@ -607,13 +613,13 @@ section {
 .bar-row .bar-name {
   width: 90px;
   font-size: 0.82rem;
-  color: var(--gray);
+  color: var(--gray-neutral);
   flex-shrink: 0;
 }
 .bar-outer {
   flex: 1;
   height: 26px;
-  background: #eef4f4;
+  background: rgba(255, 255, 255, 0.08);
   border-radius: 8px;
   overflow: hidden;
 }
@@ -642,7 +648,7 @@ section {
 .pricing-hardware {
   text-align: center;
   margin-bottom: 44px;
-  color: #b9cad8;
+  color: var(--gray-neutral);
 }
 .pricing-hardware strong {
   color: var(--teal-light);
@@ -654,7 +660,7 @@ section {
   align-items: stretch;
 }
 .price-card {
-  background: var(--navy-2);
+  background: var(--gray-dark-2);
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: var(--radius);
   padding: 34px 28px;
@@ -689,7 +695,7 @@ section {
   margin-bottom: 6px;
 }
 .price-card .plan-desc {
-  color: #8ba3b5;
+  color: var(--gray-neutral);
   font-size: 0.88rem;
   margin-bottom: 22px;
   min-height: 40px;
@@ -703,7 +709,7 @@ section {
 }
 .price-card .plan-price span {
   font-size: 1rem;
-  color: #8ba3b5;
+  color: var(--gray-neutral);
   font-weight: 500;
 }
 .plan-features {
@@ -715,7 +721,7 @@ section {
   display: flex;
   align-items: flex-start;
   gap: 10px;
-  color: #cddae4;
+  color: var(--gray-light);
   font-size: 0.92rem;
   padding: 8px 0;
   border-bottom: 1px solid rgba(255, 255, 255, 0.05);
@@ -730,8 +736,8 @@ section {
    FOOTER
    ============================================================ */
 .footer {
-  background: #071726;
-  color: #8ba3b5;
+  background: var(--gray-dark-2);
+  color: var(--gray-neutral);
   padding: 60px 0 32px;
 }
 .footer-top {
@@ -788,7 +794,7 @@ section {
 .modal-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(5, 15, 25, 0.7);
+  background: rgba(18, 18, 20, 0.7);
   backdrop-filter: blur(6px);
   -webkit-backdrop-filter: blur(6px);
   display: none;
@@ -801,7 +807,7 @@ section {
   display: flex;
 }
 .modal {
-  background: var(--white);
+  background: var(--gray-dark-2);
   border-radius: 18px;
   width: 100%;
   max-width: 440px;
@@ -819,21 +825,22 @@ section {
   background: none;
   border: none;
   cursor: pointer;
-  color: var(--gray);
+  color: var(--gray-neutral);
   padding: 6px;
   border-radius: 8px;
   transition: background 0.2s ease, color 0.2s ease;
 }
 .modal-close:hover {
-  background: #f0f4f4;
-  color: var(--navy-1);
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--white);
 }
 .modal h3 {
   font-size: 1.6rem;
   margin-bottom: 6px;
+  color: var(--white);
 }
 .modal .modal-sub {
-  color: var(--gray);
+  color: var(--gray-neutral);
   font-size: 0.92rem;
   margin-bottom: 26px;
 }
@@ -844,19 +851,19 @@ section {
   display: block;
   font-size: 0.85rem;
   font-weight: 600;
-  color: var(--navy-1);
+  color: var(--gray-light);
   margin-bottom: 7px;
 }
 .field input,
 .field select {
   width: 100%;
   padding: 12px 14px;
-  border: 1.5px solid #dbe6e6;
+  border: 1.5px solid rgba(255, 255, 255, 0.12);
   border-radius: 10px;
   font-size: 0.95rem;
   font-family: var(--font-body);
-  color: var(--navy-1);
-  background: var(--white);
+  color: var(--white);
+  background: var(--gray-dark-1);
   transition: border-color 0.2s ease, box-shadow 0.2s ease;
 }
 .field input:focus,
@@ -875,7 +882,7 @@ section {
   text-align: center;
   margin-top: 20px;
   font-size: 0.9rem;
-  color: var(--gray);
+  color: var(--gray-neutral);
 }
 .modal-switch a {
   color: var(--teal);
@@ -887,11 +894,11 @@ section {
    DASHBOARD
    ============================================================ */
 .dash-body {
-  background: var(--bg-light);
+  background: var(--gray-dark-1);
   min-height: 100vh;
 }
 .dash-header {
-  background: var(--navy-1);
+  background: var(--gray-dark-2);
   color: var(--white);
   padding: 16px 0;
   position: sticky;
@@ -980,11 +987,11 @@ section {
   margin-bottom: 28px;
 }
 .stat-card {
-  background: var(--white);
+  background: var(--gray-dark-2);
   border-radius: var(--radius);
   padding: 24px;
   box-shadow: var(--shadow-sm);
-  border: 1px solid rgba(10, 31, 51, 0.06);
+  border: 1px solid rgba(161, 161, 166, 0.12);
 }
 .stat-card .stat-top {
   display: flex;
@@ -1009,25 +1016,25 @@ section {
   color: var(--coral);
 }
 .stat-icon.navy {
-  background: rgba(10, 31, 51, 0.08);
-  color: var(--navy-1);
+  background: rgba(161, 161, 166, 0.12);
+  color: var(--teal-light);
 }
 .stat-card .stat-label {
   font-size: 0.82rem;
-  color: var(--gray);
+  color: var(--gray-neutral);
   font-weight: 500;
 }
 .stat-card .stat-value {
   font-family: var(--font-head);
   font-size: 2.1rem;
   font-weight: 700;
-  color: var(--navy-1);
+  color: var(--white);
   line-height: 1.1;
 }
 .stat-card .stat-trend {
   font-size: 0.78rem;
   margin-top: 6px;
-  color: var(--gray);
+  color: var(--gray-neutral);
 }
 .dash-columns {
   display: grid;
@@ -1035,10 +1042,10 @@ section {
   gap: 20px;
 }
 .panel {
-  background: var(--white);
+  background: var(--gray-dark-2);
   border-radius: var(--radius);
   box-shadow: var(--shadow-sm);
-  border: 1px solid rgba(10, 31, 51, 0.06);
+  border: 1px solid rgba(161, 161, 166, 0.12);
   overflow: hidden;
 }
 .panel-head {
@@ -1189,10 +1196,10 @@ section {
     position: absolute;
     top: 100%;
     left: 0;
-    width: 100%;
+    right: 0;
     flex-direction: column;
     gap: 0;
-    background: rgba(10, 31, 51, 0.97);
+    background: rgba(18, 18, 20, 0.97);
     backdrop-filter: blur(14px);
     padding: 12px 24px 20px;
   }
@@ -1261,6 +1268,53 @@ section {
   .modal {
     padding: 30px 22px;
   }
+}
+
+/* ============================================================
+   ADVANCED ANIMATIONS — Character Stagger, Binary, Encryption
+   ============================================================ */
+
+/* Character stagger animation spans */
+.char {
+  display: inline-block;
+  will-change: transform, opacity;
+}
+
+.word {
+  display: inline-block;
+  white-space: nowrap;
+}
+
+/* Binary rolling text container (Amenazas section) */
+.binary-container {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+.binary-text {
+  font-family: "Courier New", monospace;
+  font-size: clamp(2rem, 6vw, 4rem);
+  font-weight: 700;
+  color: rgba(14, 165, 166, 0.1);
+  white-space: nowrap;
+  will-change: transform;
+  perspective: 1200px;
+}
+
+/* Encryption animation container */
+.encrypted-text {
+  position: relative;
+  will-change: opacity;
+}
+
+.encrypted-char {
+  display: inline-block;
+  will-change: opacity, filter;
 }
 
 /* ============================================================

@@ -1,8 +1,7 @@
 /* ============================================================
-   EcoSentinel — animations.js
-   Toda la lógica de animación con GSAP:
-   navbar, hero (canvas + char reveal + counters + parallax),
-   tarjetas de amenazas (SVG timelines), pipeline, métricas y precios.
+   EcoSentinel — animations.js (v2.0)
+   Advanced GSAP animations: Full-screen scroll with Observer,
+   character stagger reveals, binary rolling text, encryption effects.
    ============================================================ */
 
 (function () {
@@ -10,66 +9,10 @@
 
   const REDUCED = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
-  gsap.registerPlugin(ScrollTrigger, ScrollToPlugin);
+  gsap.registerPlugin(ScrollTrigger, ScrollToPlugin, Observer);
 
   /* ============================================================
-     1. NAVBAR — transición transparente -> sólida con ScrollTrigger
-  ============================================================= */
-  function initNavbar() {
-    const navbar = document.getElementById("navbar");
-    if (!navbar) return;
-
-    // ScrollTrigger que añade la clase .scrolled tras bajar 60px
-    ScrollTrigger.create({
-      start: "60px top",
-      onUpdate: (self) => {
-        if (self.scroll() > 60) navbar.classList.add("scrolled");
-        else navbar.classList.remove("scrolled");
-      },
-      onToggle: (self) => {
-        if (self.progress > 0) navbar.classList.add("scrolled");
-      },
-    });
-
-    // Menú móvil
-    const toggle = document.getElementById("navToggle");
-    const links = document.getElementById("navLinks");
-    if (toggle && links) {
-      toggle.addEventListener("click", () => {
-        const open = links.classList.toggle("mobile-open");
-        toggle.setAttribute("aria-expanded", open ? "true" : "false");
-      });
-      links.querySelectorAll("a").forEach((a) =>
-        a.addEventListener("click", () => {
-          links.classList.remove("mobile-open");
-          toggle.setAttribute("aria-expanded", "false");
-        })
-      );
-    }
-  }
-
-  /* ============================================================
-     2. SMOOTH SCROLL — links de navegación con ScrollToPlugin
-  ============================================================= */
-  function initSmoothScroll() {
-    document.querySelectorAll('a[href^="#"], [data-scroll]').forEach((link) => {
-      link.addEventListener("click", (e) => {
-        const href = link.getAttribute("href");
-        if (!href || !href.startsWith("#") || href === "#") return;
-        const target = document.querySelector(href);
-        if (!target) return;
-        e.preventDefault();
-        if (REDUCED) {
-          target.scrollIntoView();
-          return;
-        }
-        gsap.to(window, { duration: 1, scrollTo: { y: target, offsetY: 64 }, ease: "power2.inOut" });
-      });
-    });
-  }
-
-  /* ============================================================
-     3. HERO — revelado del título carácter por carácter
+     UTILS: Character splitting helper
   ============================================================= */
   function splitTitleIntoChars(el) {
     const words = el.textContent.trim().split(/\s+/);
@@ -91,110 +34,163 @@
     return spans;
   }
 
-  function initHeroText() {
-    const title = document.getElementById("heroTitle");
-    if (!title) return;
-    // Preservamos el <span class="accent"> resaltando "Inteligencia Artificial"
-    const accent = title.querySelector(".accent");
-    const accentText = accent ? accent.textContent : "";
-
-    // Reconstruimos el título manteniendo el color de acento en las palabras finales
-    title.textContent = title.textContent; // colapsa a texto plano
-    const chars = splitTitleIntoChars(title);
-
-    // Re-aplicamos color de acento a los caracteres que pertenecen al texto resaltado
-    if (accentText) {
-      const full = title.textContent;
-      const startIdx = full.indexOf(accentText);
-      if (startIdx >= 0) {
-        // contamos solo caracteres no-espacio
-        let visibleIdx = 0;
-        const accentVisible = accentText.replace(/\s/g, "").length;
-        const accentStartVisible = full.slice(0, startIdx).replace(/\s/g, "").length;
-        chars.forEach((c) => {
-          if (visibleIdx >= accentStartVisible && visibleIdx < accentStartVisible + accentVisible) {
-            c.style.color = "var(--teal-light)";
-          }
-          visibleIdx++;
+  /* ============================================================
+     1. CHARACTER STAGGER ANIMATIONS — for all section titles
+  ============================================================= */
+  function initCharacterStagger() {
+    const titleElements = document.querySelectorAll("section .section-head h2, header h1");
+    titleElements.forEach((el) => {
+      if (!el.querySelector(".char")) {
+        const chars = splitTitleIntoChars(el);
+        if (REDUCED) {
+          gsap.set(chars, { opacity: 1, y: 0 });
+          return;
+        }
+        // Stagger animation on scroll into view
+        gsap.from(chars, {
+          opacity: 0,
+          y: 20,
+          rotateX: -45,
+          duration: 0.6,
+          ease: "back.out(1.4)",
+          stagger: 0.04,
+          scrollTrigger: {
+            trigger: el.closest("section") || el,
+            start: "top 80%",
+            once: true,
+          },
         });
       }
+    });
+  }
+
+  /* ============================================================
+     2. BINARY ROLLING TEXT — Amenazas section background animation
+  ============================================================= */
+  function initBinaryAnimation() {
+    const amenazasSection = document.getElementById("amenazas");
+    if (!amenazasSection) return;
+
+    // Create binary container and text if not already present
+    let binaryContainer = amenazasSection.querySelector(".binary-container");
+    if (!binaryContainer) {
+      binaryContainer = document.createElement("div");
+      binaryContainer.className = "binary-container";
+      amenazasSection.insertBefore(binaryContainer, amenazasSection.firstChild);
     }
 
+    if (binaryContainer.querySelector(".binary-text")) return; // Already initialized
+
+    const binaryText = document.createElement("div");
+    binaryText.className = "binary-text";
+    // Generate rolling 0s and 1s
+    binaryText.textContent = Array.from({ length: 150 }, () => Math.round(Math.random())).join(" ");
+    binaryContainer.appendChild(binaryText);
+
     if (REDUCED) {
-      gsap.set(chars, { opacity: 1, y: 0 });
+      gsap.set(binaryText, { rotationY: 0, opacity: 0.08 });
       return;
     }
 
-    gsap.from(chars, {
-      opacity: 0,
-      y: 40,
-      rotateX: -60,
-      duration: 0.7,
-      ease: "back.out(1.7)",
-      stagger: 0.03,
-      delay: 0.3,
+    // Execute animation once when section comes into view
+    ScrollTrigger.create({
+      trigger: amenazasSection,
+      start: "top 80%",
+      once: true,
+      onEnter: () => {
+        gsap.fromTo(
+          binaryText,
+          { rotationY: -180, opacity: 0 },
+          {
+            rotationY: 0,
+            opacity: 0.08,
+            duration: 2.2,
+            ease: "power2.inOut",
+          }
+        );
+      },
     });
   }
 
   /* ============================================================
-     4. HERO — contadores animados desde 0 con snap
+     3. ENCRYPTION ANIMATION — Tu Red Protegida section
   ============================================================= */
-  function initCounters() {
-    document.querySelectorAll("[data-count]").forEach((el) => {
-      const target = parseFloat(el.getAttribute("data-count"));
-      const decimals = parseInt(el.getAttribute("data-decimals") || "0", 10);
-      const prefix = (el.getAttribute("data-prefix") || "").replace("&lt;", "<");
-      const suffix = el.getAttribute("data-suffix") || "";
-      const snapInc = decimals > 0 ? parseFloat("0." + "0".repeat(decimals - 1) + "1") : 1;
-      const obj = { val: 0 };
+  function initEncryptionAnimation() {
+    const encryptionElement = document.querySelector(".encrypt-target"); // if exists
+    if (!encryptionElement) return;
 
-      const render = () => {
-        el.textContent = prefix + obj.val.toFixed(decimals) + suffix;
-      };
-
-      if (REDUCED) {
-        obj.val = target;
-        render();
-        return;
-      }
-
-      gsap.to(obj, {
-        val: target,
-        duration: 2,
-        ease: "power2.out",
-        delay: 0.8,
-        snap: { val: snapInc },
-        onUpdate: render,
-      });
-    });
-  }
-
-  /* ============================================================
-     5. HERO — parallax sutil con ScrollTrigger
-  ============================================================= */
-  function initHeroParallax() {
     if (REDUCED) return;
-    const inner = document.querySelector(".hero-inner");
-    const canvas = document.getElementById("hero-canvas");
-    if (inner) {
-      gsap.to(inner, {
-        y: 120,
-        opacity: 0.5,
-        ease: "none",
-        scrollTrigger: { trigger: ".hero", start: "top top", end: "bottom top", scrub: true },
+
+    ScrollTrigger.create({
+      trigger: encryptionElement,
+      start: "top 75%",
+      once: true,
+      onEnter: () => {
+        const chars = encryptionElement.querySelectorAll(".encrypted-char");
+        gsap.to(chars, {
+          opacity: 1,
+          filter: "blur(0px)",
+          duration: 0.5,
+          ease: "power2.out",
+          stagger: 0.03,
+        });
+      },
+    });
+  }
+
+  /* ============================================================
+     4. NAVBAR
+  ============================================================= */
+  function initNavbar() {
+    const navbar = document.getElementById("navbar");
+    if (!navbar) return;
+
+    ScrollTrigger.create({
+      start: "60px top",
+      onUpdate: (self) => {
+        if (self.scroll() > 60) navbar.classList.add("scrolled");
+        else navbar.classList.remove("scrolled");
+      },
+    });
+
+    const toggle = document.getElementById("navToggle");
+    const links = document.getElementById("navLinks");
+    if (toggle && links) {
+      toggle.addEventListener("click", () => {
+        const open = links.classList.toggle("mobile-open");
+        toggle.setAttribute("aria-expanded", open ? "true" : "false");
       });
-    }
-    if (canvas) {
-      gsap.to(canvas, {
-        y: 60,
-        ease: "none",
-        scrollTrigger: { trigger: ".hero", start: "top top", end: "bottom top", scrub: true },
-      });
+      links.querySelectorAll("a").forEach((a) =>
+        a.addEventListener("click", () => {
+          links.classList.remove("mobile-open");
+          toggle.setAttribute("aria-expanded", "false");
+        })
+      );
     }
   }
 
   /* ============================================================
-     6. HERO — canvas: topología de red viva con ciclo de infección
+     5. SMOOTH SCROLL
+  ============================================================= */
+  function initSmoothScroll() {
+    document.querySelectorAll('a[href^="#"], [data-scroll]').forEach((link) => {
+      link.addEventListener("click", (e) => {
+        const href = link.getAttribute("href");
+        if (!href || !href.startsWith("#") || href === "#") return;
+        const target = document.querySelector(href);
+        if (!target) return;
+        e.preventDefault();
+        if (REDUCED) {
+          target.scrollIntoView();
+          return;
+        }
+        gsap.to(window, { duration: 1, scrollTo: { y: target, offsetY: 64 }, ease: "power2.inOut" });
+      });
+    });
+  }
+
+  /* ============================================================
+     6. HERO CANVAS — network topology
   ============================================================= */
   function initHeroCanvas() {
     const canvas = document.getElementById("hero-canvas");
@@ -232,8 +228,6 @@
       }
     }
 
-    // Ciclo de infección: cada cierto tiempo un nodo se infecta,
-    // parpadea, es aislado, y luego vuelve a la normalidad.
     let flashOn = false;
     function infectionCycle() {
       if (REDUCED) return;
@@ -242,7 +236,6 @@
         const victim = healthy[Math.floor(Math.random() * healthy.length)];
         victim.infected = true;
         victim.infectT = performance.now();
-        // parpadeo de las líneas conectadas
         gsap.to({ v: 0 }, {
           v: 1,
           duration: 0.15,
@@ -252,10 +245,8 @@
             flashOn = Math.random() > 0.5;
           },
           onComplete() {
-            // aislar visualmente
             victim.isolated = true;
             gsap.delayedCall(1.2, () => {
-              // recuperación
               victim.infected = false;
               victim.isolated = false;
             });
@@ -267,7 +258,6 @@
 
     function draw() {
       ctx.clearRect(0, 0, w, h);
-      // líneas
       for (let i = 0; i < nodes.length; i++) {
         const a = nodes[i];
         a.x += a.vx;
@@ -283,7 +273,6 @@
           if (dist < LINK_DIST) {
             const connectedToInfected = (a.infected && !a.isolated) || (b.infected && !b.isolated);
             let alpha = (1 - dist / LINK_DIST) * 0.5;
-            // Si un extremo está aislado, no dibujamos la línea (desconexión)
             if (a.isolated || b.isolated) continue;
             ctx.strokeStyle = connectedToInfected
               ? `rgba(255,107,74,${flashOn ? alpha * 1.6 : alpha * 0.5})`
@@ -296,7 +285,6 @@
           }
         }
       }
-      // nodos
       for (const n of nodes) {
         let color = TEAL;
         if (n.infected) color = CORAL;
@@ -305,7 +293,6 @@
         ctx.arc(n.x, n.y, n.isolated ? n.r + 1 : n.r, 0, Math.PI * 2);
         ctx.fill();
         if (n.infected) {
-          // halo del nodo infectado
           ctx.strokeStyle = `rgba(255,107,74,${n.isolated ? 0.9 : 0.4})`;
           ctx.lineWidth = n.isolated ? 2 : 1;
           ctx.beginPath();
@@ -324,7 +311,6 @@
     });
 
     if (REDUCED) {
-      // estado estático: solo dibujar una vez
       draw = function staticDraw() {
         ctx.clearRect(0, 0, w, h);
         for (const n of nodes) {
@@ -343,7 +329,40 @@
   }
 
   /* ============================================================
-     7. AMENAZAS — entrada de tarjetas con stagger + SVG loops
+     7. COUNTERS
+  ============================================================= */
+  function initCounters() {
+    document.querySelectorAll("[data-count]").forEach((el) => {
+      const target = parseFloat(el.getAttribute("data-count"));
+      const decimals = parseInt(el.getAttribute("data-decimals") || "0", 10);
+      const prefix = (el.getAttribute("data-prefix") || "").replace("&lt;", "<");
+      const suffix = el.getAttribute("data-suffix") || "";
+      const snapInc = decimals > 0 ? parseFloat("0." + "0".repeat(decimals - 1) + "1") : 1;
+      const obj = { val: 0 };
+
+      const render = () => {
+        el.textContent = prefix + obj.val.toFixed(decimals) + suffix;
+      };
+
+      if (REDUCED) {
+        obj.val = target;
+        render();
+        return;
+      }
+
+      gsap.to(obj, {
+        val: target,
+        duration: 2,
+        ease: "power2.out",
+        delay: 0.8,
+        snap: { val: snapInc },
+        onUpdate: render,
+      });
+    });
+  }
+
+  /* ============================================================
+     8. THREAT CARDS
   ============================================================= */
   function initThreatCards() {
     const cards = gsap.utils.toArray(".threat-card");
@@ -367,7 +386,6 @@
     }
   }
 
-  // a) Ransomware: archivo -> se cifra -> candado -> escudo descifra
   function threatRansomware() {
     const scope = document.querySelector('[data-anim="ransomware"]');
     if (!scope) return;
@@ -382,7 +400,6 @@
       .to(lines, { stroke: "#5EEAD4", attr: { x2: (i) => (i === 2 ? 108 : 120) }, duration: 0.4 });
   }
 
-  // b) DDoS: paquetes -> servidor parpadea rojo -> escudo -> rebote
   function threatDDoS() {
     const scope = document.querySelector('[data-anim="ddos"]');
     if (!scope) return;
@@ -406,7 +423,6 @@
       .to(server, { stroke: "#5EEAD4", duration: 0.2 }, "<");
   }
 
-  // c) Port Scanning: scanner recorre puertos, los ilumina, EcoSentinel bloquea
   function threatPortScan() {
     const scope = document.querySelector('[data-anim="portscan"]');
     if (!scope) return;
@@ -423,7 +439,6 @@
       .to(scanner, { stroke: "#FF6B4A", duration: 0.2 });
   }
 
-  // d) Botnet: dispositivos se infectan, forman red hacia C&C, EcoSentinel aísla
   function threatBotnet() {
     const scope = document.querySelector('[data-anim="botnet"]');
     if (!scope) return;
@@ -435,11 +450,10 @@
       .to(links, { opacity: 1, duration: 0.3 }, "<0.2")
       .to(cnc, { stroke: "#FF6B4A", scale: 1.1, transformOrigin: "100px 125px", duration: 0.2, repeat: 2, yoyo: true })
       .to({}, { duration: 0.4 })
-      .to(links, { opacity: 0, duration: 0.3 }) // EcoSentinel corta las conexiones
+      .to(links, { opacity: 0, duration: 0.3 })
       .to(devices, { stroke: "#5EEAD4", duration: 0.4, stagger: 0.1 });
   }
 
-  // e) Brute Force: intentos rápidos + contador -> bloqueo con candado
   function threatBruteForce() {
     const scope = document.querySelector('[data-anim="brute"]');
     if (!scope) return;
@@ -468,7 +482,6 @@
       .to({}, { duration: 0.6 });
   }
 
-  // f) Spoofing: impostor con misma IP intenta suplantar, EcoSentinel lo marca
   function threatSpoofing() {
     const scope = document.querySelector('[data-anim="spoofing"]');
     if (!scope) return;
@@ -486,7 +499,7 @@
   }
 
   /* ============================================================
-     8. CÓMO FUNCIONA — pipeline con relleno por scroll + flow dot
+     9. PIPELINE
   ============================================================= */
   function initPipeline() {
     const section = document.getElementById("como-funciona");
@@ -503,7 +516,6 @@
       return;
     }
 
-    // Relleno progresivo de la línea con scrub
     if (fill) {
       gsap.to(fill, {
         [isMobile ? "height" : "width"]: "100%",
@@ -512,7 +524,6 @@
       });
     }
 
-    // Activación secuencial de cada nodo
     nodes.forEach((node, i) => {
       const desc = node.querySelector(".pdesc");
       ScrollTrigger.create({
@@ -534,7 +545,6 @@
       });
     });
 
-    // Punto de datos que viaja infinitamente por el pipeline
     if (flowDot) {
       gsap.set(flowDot, isMobile ? { top: "0%", left: "50%" } : { left: "0%" });
       gsap.to(flowDot, {
@@ -547,151 +557,83 @@
   }
 
   /* ============================================================
-     9. MÉTRICAS — anillos circulares, reducción FN y barras comparativas
+     10. METRICS — rings and comparison bars
   ============================================================= */
   function initMetrics() {
     const section = document.getElementById("metricas");
     if (!section) return;
 
     const rings = gsap.utils.toArray(".ring");
-    const R = 52;
-    const CIRC = 2 * Math.PI * R;
-
     rings.forEach((ring) => {
       const bar = ring.querySelector(".bar");
-      const valueEl = ring.querySelector(".ring-value");
-      const pct = parseFloat(ring.getAttribute("data-ring"));
-      const display = ring.getAttribute("data-display");
-      gsap.set(bar, { strokeDasharray: CIRC, strokeDashoffset: CIRC });
+      if (!bar) return;
+      const target = parseFloat(bar.getAttribute("data-percent") || "0");
+      const radius = 70;
+      const circumference = 2 * Math.PI * radius;
+      const offset = circumference * (1 - target / 100);
 
       if (REDUCED) {
-        gsap.set(bar, { strokeDashoffset: CIRC * (1 - pct / 100) });
-        valueEl.textContent = display;
+        gsap.set(bar, { strokeDashoffset: offset });
         return;
       }
 
-      ScrollTrigger.create({
-        trigger: section,
-        start: "top 70%",
-        once: true,
-        onEnter: () => {
-          gsap.to(bar, { strokeDashoffset: CIRC * (1 - pct / 100), duration: 1.6, ease: "power2.out" });
-          // contador de la etiqueta
-          const isDecimal = display.indexOf(".") === 0 || display.startsWith("0.");
-          const obj = { v: 0 };
-          const targetNum = parseFloat(display);
-          gsap.to(obj, {
-            v: targetNum,
-            duration: 1.6,
-            ease: "power2.out",
-            snap: { v: isDecimal ? 0.0001 : 0.01 },
-            onUpdate() {
-              valueEl.textContent = isDecimal
-                ? obj.v.toFixed(4)
-                : obj.v.toFixed(2) + (display.includes("%") ? "%" : "");
-            },
-            onComplete() {
-              valueEl.textContent = display;
-            },
-          });
-        },
-      });
+      gsap.fromTo(
+        bar,
+        { strokeDashoffset: circumference },
+        {
+          strokeDashoffset: offset,
+          duration: 2.2,
+          ease: "power2.out",
+          scrollTrigger: { trigger: section, start: "top 65%" },
+        }
+      );
     });
 
-    // Reducción de falsos negativos (número que "cuenta")
-    const fn = section.querySelector("[data-fn]");
-    if (fn) {
-      const target = parseFloat(fn.getAttribute("data-fn"));
-      if (REDUCED) {
-        fn.textContent = "-" + target + "%";
-      } else {
-        ScrollTrigger.create({
-          trigger: section,
-          start: "top 65%",
-          once: true,
-          onEnter: () => {
-            const obj = { v: 0 };
-            gsap.to(obj, {
-              v: target,
-              duration: 1.8,
-              ease: "power2.out",
-              snap: { v: 0.1 },
-              onUpdate() {
-                fn.textContent = "-" + obj.v.toFixed(1) + "%";
-              },
-            });
-          },
-        });
-      }
-    }
-
-    // Barras comparativas antes/después
+    // Comparison bars
     const bars = gsap.utils.toArray(".bar-inner");
-    bars.forEach((bar) => {
-      const width = bar.getAttribute("data-width");
-      const value = bar.getAttribute("data-value");
-      bar.textContent = value;
-      if (REDUCED) {
-        gsap.set(bar, { width: width + "%" });
-        return;
-      }
-      gsap.set(bar, { width: "0%" });
-      ScrollTrigger.create({
-        trigger: section,
-        start: "top 60%",
-        once: true,
-        onEnter: () => gsap.to(bar, { width: width + "%", duration: 1.4, ease: "power2.out" }),
+    if (!REDUCED) {
+      gsap.from(bars, {
+        width: 0,
+        duration: 1.4,
+        ease: "power2.out",
+        stagger: 0.12,
+        scrollTrigger: { trigger: section, start: "top 65%" },
       });
-    });
+    }
   }
 
   /* ============================================================
-     10. PRECIOS — entrada con stagger + hover con GSAP
+     11. PRICING CARDS
   ============================================================= */
   function initPricing() {
     const cards = gsap.utils.toArray(".price-card");
-    if (!cards.length) return;
-
-    if (!REDUCED) {
+    if (!REDUCED && cards.length) {
       gsap.from(cards, {
-        y: 50,
+        y: 80,
         opacity: 0,
-        duration: 0.6,
+        duration: 0.8,
         ease: "power3.out",
-        stagger: 0.12,
-        scrollTrigger: { trigger: "#precios", start: "top 75%" },
+        stagger: 0.18,
+        scrollTrigger: { trigger: "#precios", start: "top 70%" },
       });
     }
-
-    cards.forEach((card) => {
-      const featured = card.classList.contains("featured");
-      const baseScale = featured ? 1.0 : 1.0;
-      card.addEventListener("mouseenter", () => {
-        if (REDUCED) return;
-        gsap.to(card, { y: -10, scale: 1.03, boxShadow: "0 22px 50px rgba(0,0,0,0.35)", duration: 0.3, ease: "power2.out" });
-      });
-      card.addEventListener("mouseleave", () => {
-        if (REDUCED) return;
-        gsap.to(card, { y: 0, scale: baseScale, boxShadow: featured ? "var(--shadow-teal)" : "none", duration: 0.3, ease: "power2.out" });
-      });
-    });
   }
 
   /* ============================================================
-     INIT
+     INIT — Run all animation systems
   ============================================================= */
   function init() {
     initNavbar();
     initSmoothScroll();
-    initHeroText();
-    initCounters();
-    initHeroParallax();
     initHeroCanvas();
+    initCounters();
+    initCharacterStagger();
+    initBinaryAnimation();
+    initEncryptionAnimation();
     initThreatCards();
     initPipeline();
     initMetrics();
     initPricing();
-    ScrollTrigger.refresh();
   }
 
   if (document.readyState === "loading") {
