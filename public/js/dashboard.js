@@ -1,6 +1,7 @@
 /* ============================================================
    EcoSentinel — dashboard.js
-   Panel de monitoreo con datos SIMULADOS.
+   Panel de monitoreo con datos SIMULADOS, adaptado al perfil de
+   conocimiento del usuario (ver cuestionario en auth.js).
    Cuando se conecte al appliance real, los datos llegarán vía
    WebSocket desde el motor de inferencia. La función connectLive()
    deja preparado ese punto de integración.
@@ -17,7 +18,7 @@
       const raw = sessionStorage.getItem("ecosentinel_session");
       if (raw) return JSON.parse(raw);
     } catch (e) {}
-    return { company: "Mi Empresa", email: "demo@empresa.com", plan: "Pro" };
+    return { company: "Mi Empresa", email: "demo@empresa.com", plan: "Pro", profile: "intermedio" };
   }
 
   const session = loadSession();
@@ -35,6 +36,136 @@
       window.location.href = "index.html";
     });
   }
+
+  /* ---------- Perfil de conocimiento ----------
+     Ajusta el lenguaje y el nivel de detalle de las recomendaciones
+     según lo que la persona respondió en el cuestionario de registro. */
+  const PROFILES = {
+    principiante: {
+      label: "Principiante",
+      tips: [
+        "Activa la verificación en dos pasos en tu correo empresarial: aunque alguien robe tu contraseña, no podrá entrar sin el código extra que solo tú recibes.",
+        "Cambia las contraseñas de fábrica de tu router y cámaras (como \"admin123\"); son las primeras que prueba un atacante.",
+        "No abras archivos adjuntos de correos inesperados, aunque parezcan venir de un banco o proveedor conocido.",
+        "Haz una copia de tus archivos importantes al menos una vez por semana, en un disco externo o en la nube.",
+      ],
+    },
+    intermedio: {
+      label: "Intermedio",
+      tips: [
+        "Configura tu firewall para permitir solo el tráfico entrante que realmente necesitas; cierra los puertos que no usas.",
+        "Separa tu red Wi-Fi: invitados y dispositivos IoT en una red aparte de las computadoras con información sensible.",
+        "Revisa los registros de acceso de tus sistemas cada semana en busca de intentos de acceso inusuales.",
+        "Instala las actualizaciones de seguridad del sistema operativo y del firmware de tu equipo de red en cuanto salgan.",
+      ],
+    },
+    avanzado: {
+      label: "Avanzado",
+      tips: [
+        "Segmenta tu red con VLANs para aislar los dispositivos IoT del resto de tu infraestructura crítica.",
+        "Implementa detección de anomalías con líneas base de tráfico (baselining) para reducir falsos negativos ante ataques de día cero.",
+        "Habilita autenticación multifactor resistente a phishing (FIDO2/WebAuthn) en todos los accesos administrativos.",
+        "Programa pruebas de penetración y ejercicios de Red Team periódicos sobre tu perímetro expuesto.",
+      ],
+    },
+  };
+  const profileKeyName = PROFILES[session.profile] ? session.profile : "intermedio";
+  const profile = PROFILES[profileKeyName];
+
+  const profileBadge = document.getElementById("profileBadge");
+  if (profileBadge) profileBadge.textContent = "Perfil: " + profile.label;
+
+  /* ---------- Recomendaciones + postura de seguridad ---------- */
+  function recoStorageKey() {
+    return "ecosentinel_reco_" + (session.email || "demo").trim().toLowerCase();
+  }
+  function loadDoneSet() {
+    try {
+      const raw = localStorage.getItem(recoStorageKey());
+      return raw ? new Set(JSON.parse(raw)) : new Set();
+    } catch (e) {
+      return new Set();
+    }
+  }
+  function saveDoneSet(set) {
+    try {
+      localStorage.setItem(recoStorageKey(), JSON.stringify([...set]));
+    } catch (e) {}
+  }
+
+  const recoList = document.getElementById("recoList");
+  const recoCount = document.getElementById("recoCount");
+  const postureBar = document.getElementById("postureBar");
+  const postureValue = document.getElementById("postureValue");
+  const POSTURE_R = 52;
+  const POSTURE_CIRC = 2 * Math.PI * POSTURE_R;
+
+  if (postureBar) {
+    postureBar.setAttribute("stroke-dasharray", POSTURE_CIRC.toFixed(2));
+    postureBar.setAttribute("stroke-dashoffset", POSTURE_CIRC.toFixed(2));
+  }
+
+  function postureColor(pct) {
+    if (pct < 40) return "#C4694A";
+    if (pct < 75) return "#D9B44A";
+    return "#6FBDB0";
+  }
+
+  function updatePosture(doneSet, animate) {
+    const total = profile.tips.length;
+    const pct = total ? Math.round((doneSet.size / total) * 100) : 0;
+    if (recoCount) recoCount.textContent = `${doneSet.size}/${total} aplicadas`;
+    if (!postureBar || !postureValue) return;
+
+    const offset = POSTURE_CIRC * (1 - pct / 100);
+    const color = postureColor(pct);
+
+    if (REDUCED || !animate) {
+      postureBar.style.stroke = color;
+      postureBar.setAttribute("stroke-dashoffset", offset.toFixed(2));
+      postureValue.textContent = pct + "%";
+      return;
+    }
+
+    postureBar.style.stroke = color;
+    gsap.to(postureBar, { attr: { "stroke-dashoffset": offset }, duration: 0.8, ease: "power2.out" });
+    const obj = { v: parseInt(postureValue.textContent, 10) || 0 };
+    gsap.to(obj, {
+      v: pct,
+      duration: 0.8,
+      ease: "power2.out",
+      snap: { v: 1 },
+      onUpdate() {
+        postureValue.textContent = obj.v + "%";
+      },
+    });
+  }
+
+  function renderRecommendations() {
+    if (!recoList) return;
+    const doneSet = loadDoneSet();
+    recoList.innerHTML = "";
+    profile.tips.forEach((tip, i) => {
+      const li = document.createElement("li");
+      li.className = "reco-item" + (doneSet.has(i) ? " done" : "");
+      li.innerHTML = `
+        <span class="reco-check" aria-hidden="true">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="m20 6-11 11-5-5"/></svg>
+        </span>
+        <span class="reco-text">${tip}</span>`;
+      li.addEventListener("click", () => {
+        if (doneSet.has(i)) doneSet.delete(i);
+        else doneSet.add(i);
+        li.classList.toggle("done");
+        saveDoneSet(doneSet);
+        updatePosture(doneSet, true);
+      });
+      recoList.appendChild(li);
+    });
+    updatePosture(doneSet, !REDUCED);
+  }
+
+  renderRecommendations();
 
   /* ---------- Contadores animados ---------- */
   function animateNumber(el, target, duration) {
@@ -117,7 +248,7 @@
       alertsBody.removeChild(alertsBody.lastChild);
     }
     if (animate && !REDUCED) {
-      gsap.from(tr, { backgroundColor: "rgba(255,107,74,0.12)", opacity: 0, y: -8, duration: 0.5, ease: "power2.out" });
+      gsap.from(tr, { backgroundColor: "rgba(196,105,74,0.16)", opacity: 0, y: -8, duration: 0.5, ease: "power2.out" });
     }
   }
 
@@ -189,8 +320,8 @@
 
       // grid horizontal + etiquetas
       ctx.font = "10px Inter, sans-serif";
-      ctx.fillStyle = "#94a7b6";
-      ctx.strokeStyle = "rgba(100,116,139,0.15)";
+      ctx.fillStyle = "#8b99a6";
+      ctx.strokeStyle = "rgba(139,153,166,0.15)";
       ctx.lineWidth = 1;
       const steps = 4;
       for (let s = 0; s <= steps; s++) {
@@ -209,13 +340,13 @@
         const dH = (det[i] / maxVal) * plotH * progress;
         const bH = (blk[i] / maxVal) * plotH * progress;
 
-        ctx.fillStyle = "#FF6B4A";
+        ctx.fillStyle = "#C4694A";
         ctx.fillRect(gx - barW - 1, padT + plotH - dH, barW, dH);
-        ctx.fillStyle = "#0EA5A6";
+        ctx.fillStyle = "#2F8F86";
         ctx.fillRect(gx + 1, padT + plotH - bH, barW, bH);
 
         if (i % 4 === 0) {
-          ctx.fillStyle = "#94a7b6";
+          ctx.fillStyle = "#8b99a6";
           ctx.fillText(i + "h", gx - 8, ch - 8);
         }
       }
@@ -239,6 +370,72 @@
     // redibujo estático al redimensionar
     const canvas = document.getElementById("dash-chart");
     if (canvas) drawChart();
+  });
+
+  /* ---------- Distribución de amenazas (dona animada) ---------- */
+  function drawDistribution() {
+    const canvas = document.getElementById("distChart");
+    const legendEl = document.getElementById("distLegend");
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    const size = canvas.clientWidth || 220;
+    canvas.width = size * dpr;
+    canvas.height = size * dpr;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+    const data = [
+      { label: "Ransomware", pct: 22, color: "#C4694A" },
+      { label: "Brute Force", pct: 20, color: "#6FBDB0" },
+      { label: "Port Scanning", pct: 18, color: "#D9B44A" },
+      { label: "DDoS", pct: 16, color: "#4A90C4" },
+      { label: "Botnets Mirai", pct: 14, color: "#8C6FBD" },
+      { label: "Spoofing", pct: 10, color: "#8b99a6" },
+    ];
+
+    if (legendEl) {
+      legendEl.innerHTML = data
+        .map((d) => `<li><i style="background:${d.color}"></i>${d.label}<b>${d.pct}%</b></li>`)
+        .join("");
+    }
+
+    const cx = size / 2;
+    const cy = size / 2;
+    const rOuter = size / 2 - 6;
+    const rInner = rOuter * 0.6;
+
+    function render(progress) {
+      ctx.clearRect(0, 0, size, size);
+      let start = -Math.PI / 2;
+      data.forEach((d) => {
+        const sweep = (d.pct / 100) * Math.PI * 2 * progress;
+        ctx.beginPath();
+        ctx.moveTo(cx, cy);
+        ctx.arc(cx, cy, rOuter, start, start + sweep);
+        ctx.closePath();
+        ctx.fillStyle = d.color;
+        ctx.fill();
+        start += sweep;
+      });
+      ctx.globalCompositeOperation = "destination-out";
+      ctx.beginPath();
+      ctx.arc(cx, cy, rInner, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.globalCompositeOperation = "source-over";
+    }
+
+    if (REDUCED) {
+      render(1);
+      return;
+    }
+    const state = { p: 0 };
+    gsap.to(state, { p: 1, duration: 1.6, ease: "power2.out", onUpdate: () => render(state.p) });
+  }
+
+  drawDistribution();
+  window.addEventListener("resize", () => {
+    const canvas = document.getElementById("distChart");
+    if (canvas) drawDistribution();
   });
 
   /* ---------- Punto de integración con el appliance real ----------

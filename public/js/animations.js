@@ -1,8 +1,9 @@
 /* ============================================================
    EcoSentinel — animations.js
-   Toda la lógica de animación con GSAP:
-   navbar, hero (canvas + char reveal + counters + parallax),
-   tarjetas de amenazas (SVG timelines), pipeline, métricas y precios.
+   GSAP: navbar, texto cifrado/descifrado en todos los títulos,
+   crawl horizontal de "Seis vectores..." con fondo de red
+   neuronal roja, carrusel de amenazas, pipeline,
+   "¿Por qué nosotros?" y precios.
    ============================================================ */
 
 (function () {
@@ -10,7 +11,7 @@
 
   const REDUCED = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
-  gsap.registerPlugin(ScrollTrigger, ScrollToPlugin);
+  gsap.registerPlugin(ScrollTrigger, ScrollToPlugin, SplitText, ScrambleTextPlugin);
 
   /* ============================================================
      1. NAVBAR — transición transparente -> sólida con ScrollTrigger
@@ -19,7 +20,6 @@
     const navbar = document.getElementById("navbar");
     if (!navbar) return;
 
-    // ScrollTrigger que añade la clase .scrolled tras bajar 60px
     ScrollTrigger.create({
       start: "60px top",
       onUpdate: (self) => {
@@ -31,7 +31,6 @@
       },
     });
 
-    // Menú móvil
     const toggle = document.getElementById("navToggle");
     const links = document.getElementById("navLinks");
     if (toggle && links) {
@@ -49,7 +48,7 @@
   }
 
   /* ============================================================
-     2. SMOOTH SCROLL — links de navegación con ScrollToPlugin
+     2. SMOOTH SCROLL — links de navegación
   ============================================================= */
   function initSmoothScroll() {
     document.querySelectorAll('a[href^="#"], [data-scroll]').forEach((link) => {
@@ -69,76 +68,86 @@
   }
 
   /* ============================================================
-     3. HERO — revelado del título carácter por carácter
+     3. TEXTO CIFRADO/DESCIFRADO (ScrambleTextPlugin)
+        Se usa en el título del hero y en todos los títulos de
+        sección: primero se ve el texto "encriptado" (revuelto) y
+        luego se descifra letra por letra, despacio y de forma
+        notoria (nada de instantáneo).
   ============================================================= */
-  function splitTitleIntoChars(el) {
-    const words = el.textContent.trim().split(/\s+/);
-    el.innerHTML = "";
-    const spans = [];
-    words.forEach((word, wi) => {
-      const wordSpan = document.createElement("span");
-      wordSpan.className = "word";
-      [...word].forEach((ch) => {
-        const c = document.createElement("span");
-        c.className = "char";
-        c.textContent = ch;
-        wordSpan.appendChild(c);
-        spans.push(c);
-      });
-      el.appendChild(wordSpan);
-      if (wi < words.length - 1) el.appendChild(document.createTextNode(" "));
-    });
-    return spans;
-  }
-
-  function initHeroText() {
-    const title = document.getElementById("heroTitle");
-    if (!title) return;
-    // Preservamos el <span class="accent"> resaltando "Inteligencia Artificial"
-    const accent = title.querySelector(".accent");
-    const accentText = accent ? accent.textContent : "";
-
-    // Reconstruimos el título manteniendo el color de acento en las palabras finales
-    title.textContent = title.textContent; // colapsa a texto plano
-    const chars = splitTitleIntoChars(title);
-
-    // Re-aplicamos color de acento a los caracteres que pertenecen al texto resaltado
-    if (accentText) {
-      const full = title.textContent;
-      const startIdx = full.indexOf(accentText);
-      if (startIdx >= 0) {
-        // contamos solo caracteres no-espacio
-        let visibleIdx = 0;
-        const accentVisible = accentText.replace(/\s/g, "").length;
-        const accentStartVisible = full.slice(0, startIdx).replace(/\s/g, "").length;
-        chars.forEach((c) => {
-          if (visibleIdx >= accentStartVisible && visibleIdx < accentStartVisible + accentVisible) {
-            c.style.color = "var(--teal-light)";
-          }
-          visibleIdx++;
-        });
-      }
-    }
-
+  function scrambleReveal(el, fullText, opts) {
+    opts = opts || {};
     if (REDUCED) {
-      gsap.set(chars, { opacity: 1, y: 0 });
+      el.textContent = fullText;
+      if (opts.onComplete) opts.onComplete();
       return;
     }
+    el.textContent = "";
+    gsap.to(el, {
+      duration: opts.duration || 3.4,
+      delay: opts.delay || 0.15,
+      ease: "power1.inOut",
+      scrambleText: {
+        text: fullText,
+        chars: "upperAndLowerCase",
+        revealDelay: opts.revealDelay || 0.55,
+        tweenLength: true,
+      },
+      onComplete: opts.onComplete,
+    });
+  }
 
-    gsap.from(chars, {
-      opacity: 0,
-      y: 40,
-      rotateX: -60,
-      duration: 0.7,
-      ease: "back.out(1.7)",
-      stagger: 0.03,
-      delay: 0.3,
+  function initHeroScramble() {
+    const el = document.getElementById("heroTitle");
+    if (!el) return;
+    const fullText = el.getAttribute("data-full-text") || el.textContent.trim();
+    const accentText = el.getAttribute("data-accent") || "";
+
+    function applyAccent() {
+      el.textContent = fullText;
+      if (!accentText) return;
+      const idx = fullText.indexOf(accentText);
+      if (idx === -1) return;
+      const before = fullText.slice(0, idx);
+      const after = fullText.slice(idx + accentText.length);
+      el.textContent = "";
+      el.append(document.createTextNode(before));
+      const span = document.createElement("span");
+      span.className = "accent";
+      span.textContent = accentText;
+      el.appendChild(span);
+      el.append(document.createTextNode(after));
+    }
+
+    scrambleReveal(el, fullText, { duration: 3.6, delay: 0.3, revealDelay: 0.6, onComplete: applyAccent });
+  }
+
+  // Resto de títulos de sección (marcados con [data-scramble]): se
+  // descifran al entrar en la vista, una sola vez.
+  function initSectionScrambles() {
+    document.querySelectorAll("[data-scramble]").forEach((el) => {
+      const fullText = el.textContent.trim();
+      const run = () => scrambleReveal(el, fullText);
+      if (REDUCED) {
+        run();
+        return;
+      }
+      ScrollTrigger.create({
+        trigger: el,
+        start: "top 82%",
+        once: true,
+        onEnter: run,
+      });
     });
   }
 
   /* ============================================================
      4. HERO — contadores animados desde 0 con snap
   ============================================================= */
+  function formatCount(val, decimals, prefix, suffix) {
+    const opts = { minimumFractionDigits: decimals, maximumFractionDigits: decimals };
+    return prefix + val.toLocaleString("es-MX", opts) + suffix;
+  }
+
   function initCounters() {
     document.querySelectorAll("[data-count]").forEach((el) => {
       const target = parseFloat(el.getAttribute("data-count"));
@@ -149,7 +158,7 @@
       const obj = { val: 0 };
 
       const render = () => {
-        el.textContent = prefix + obj.val.toFixed(decimals) + suffix;
+        el.textContent = formatCount(obj.val, decimals, prefix, suffix);
       };
 
       if (REDUCED) {
@@ -204,8 +213,8 @@
     const nodes = [];
     const NODE_COUNT = window.innerWidth < 640 ? 26 : 52;
     const LINK_DIST = window.innerWidth < 640 ? 120 : 160;
-    const TEAL = "#5EEAD4";
-    const CORAL = "#FF6B4A";
+    const TEAL = "#6FBDB0";
+    const CORAL = "#C4694A";
 
     function resize() {
       dpr = Math.min(window.devicePixelRatio || 1, 2);
@@ -232,8 +241,6 @@
       }
     }
 
-    // Ciclo de infección: cada cierto tiempo un nodo se infecta,
-    // parpadea, es aislado, y luego vuelve a la normalidad.
     let flashOn = false;
     function infectionCycle() {
       if (REDUCED) return;
@@ -242,7 +249,6 @@
         const victim = healthy[Math.floor(Math.random() * healthy.length)];
         victim.infected = true;
         victim.infectT = performance.now();
-        // parpadeo de las líneas conectadas
         gsap.to({ v: 0 }, {
           v: 1,
           duration: 0.15,
@@ -252,10 +258,8 @@
             flashOn = Math.random() > 0.5;
           },
           onComplete() {
-            // aislar visualmente
             victim.isolated = true;
             gsap.delayedCall(1.2, () => {
-              // recuperación
               victim.infected = false;
               victim.isolated = false;
             });
@@ -267,7 +271,6 @@
 
     function draw() {
       ctx.clearRect(0, 0, w, h);
-      // líneas
       for (let i = 0; i < nodes.length; i++) {
         const a = nodes[i];
         a.x += a.vx;
@@ -283,11 +286,10 @@
           if (dist < LINK_DIST) {
             const connectedToInfected = (a.infected && !a.isolated) || (b.infected && !b.isolated);
             let alpha = (1 - dist / LINK_DIST) * 0.5;
-            // Si un extremo está aislado, no dibujamos la línea (desconexión)
             if (a.isolated || b.isolated) continue;
             ctx.strokeStyle = connectedToInfected
-              ? `rgba(255,107,74,${flashOn ? alpha * 1.6 : alpha * 0.5})`
-              : `rgba(94,234,212,${alpha})`;
+              ? `rgba(196,105,74,${flashOn ? alpha * 1.6 : alpha * 0.5})`
+              : `rgba(111,189,176,${alpha})`;
             ctx.lineWidth = 1;
             ctx.beginPath();
             ctx.moveTo(a.x, a.y);
@@ -296,7 +298,6 @@
           }
         }
       }
-      // nodos
       for (const n of nodes) {
         let color = TEAL;
         if (n.infected) color = CORAL;
@@ -305,8 +306,7 @@
         ctx.arc(n.x, n.y, n.isolated ? n.r + 1 : n.r, 0, Math.PI * 2);
         ctx.fill();
         if (n.infected) {
-          // halo del nodo infectado
-          ctx.strokeStyle = `rgba(255,107,74,${n.isolated ? 0.9 : 0.4})`;
+          ctx.strokeStyle = `rgba(196,105,74,${n.isolated ? 0.9 : 0.4})`;
           ctx.lineWidth = n.isolated ? 2 : 1;
           ctx.beginPath();
           ctx.arc(n.x, n.y, n.r + 6, 0, Math.PI * 2);
@@ -324,7 +324,6 @@
     });
 
     if (REDUCED) {
-      // estado estático: solo dibujar una vez
       draw = function staticDraw() {
         ctx.clearRect(0, 0, w, h);
         for (const n of nodes) {
@@ -343,46 +342,172 @@
   }
 
   /* ============================================================
-     7. AMENAZAS — entrada de tarjetas con stagger + SVG loops
+     7. AMENAZAS — fondo de red neuronal roja con calaveras
   ============================================================= */
-  function initThreatCards() {
-    const cards = gsap.utils.toArray(".threat-card");
-    if (!REDUCED && cards.length) {
-      gsap.from(cards, {
-        y: 60,
-        opacity: 0,
-        duration: 0.7,
-        ease: "power3.out",
-        stagger: 0.15,
-        scrollTrigger: { trigger: "#amenazas", start: "top 75%" },
-      });
+  function initAmenazasCanvas() {
+    const canvas = document.getElementById("amenazasCanvas");
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    let w, h, dpr;
+    const nodes = [];
+    const NODE_COUNT = window.innerWidth < 640 ? 20 : 40;
+    const LINK_DIST = window.innerWidth < 640 ? 110 : 150;
+    const RED = "#e0504f";
+    const RED_RGB = "196,40,40";
+
+    function resize() {
+      dpr = Math.min(window.devicePixelRatio || 1, 2);
+      w = canvas.clientWidth;
+      h = canvas.clientHeight;
+      canvas.width = w * dpr;
+      canvas.height = h * dpr;
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     }
-    if (!REDUCED) {
-      threatRansomware();
-      threatDDoS();
-      threatPortScan();
-      threatBotnet();
-      threatBruteForce();
-      threatSpoofing();
+
+    function makeNodes() {
+      nodes.length = 0;
+      for (let i = 0; i < NODE_COUNT; i++) {
+        nodes.push({
+          x: Math.random() * w,
+          y: Math.random() * h,
+          vx: (Math.random() - 0.5) * 0.24,
+          vy: (Math.random() - 0.5) * 0.24,
+          r: 1.6 + Math.random() * 1.8,
+          skull: Math.random() < 0.14,
+        });
+      }
     }
+
+    function paint() {
+      ctx.clearRect(0, 0, w, h);
+      for (let i = 0; i < nodes.length; i++) {
+        const a = nodes[i];
+        for (let j = i + 1; j < nodes.length; j++) {
+          const b = nodes[j];
+          const dist = Math.hypot(a.x - b.x, a.y - b.y);
+          if (dist < LINK_DIST) {
+            const alpha = (1 - dist / LINK_DIST) * 0.4;
+            ctx.strokeStyle = `rgba(${RED_RGB},${alpha})`;
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.moveTo(a.x, a.y);
+            ctx.lineTo(b.x, b.y);
+            ctx.stroke();
+          }
+        }
+      }
+      for (const n of nodes) {
+        if (n.skull) {
+          ctx.font = "18px serif";
+          ctx.textAlign = "center";
+          ctx.textBaseline = "middle";
+          ctx.globalAlpha = 0.8;
+          ctx.fillText("💀", n.x, n.y);
+          ctx.globalAlpha = 1;
+        } else {
+          ctx.fillStyle = RED;
+          ctx.beginPath();
+          ctx.arc(n.x, n.y, n.r, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+    }
+
+    function draw() {
+      for (const n of nodes) {
+        n.x += n.vx;
+        n.y += n.vy;
+        if (n.x < 0 || n.x > w) n.vx *= -1;
+        if (n.y < 0 || n.y > h) n.vy *= -1;
+      }
+      paint();
+      requestAnimationFrame(draw);
+    }
+
+    resize();
+    makeNodes();
+    window.addEventListener("resize", () => {
+      resize();
+      makeNodes();
+      if (REDUCED) paint();
+    });
+
+    paint();
+    if (!REDUCED) requestAnimationFrame(draw);
   }
 
-  // a) Ransomware: archivo -> se cifra -> candado -> escudo descifra
+  /* ============================================================
+     8. AMENAZAS — titular "Seis vectores de ataque, un solo
+        guardián" en crawl horizontal fijado con scroll (pin +
+        SplitText vía containerAnimation). En pantallas angostas,
+        donde no hay espacio para un crawl, se revela con el mismo
+        efecto de cifrado/descifrado que el resto de los títulos.
+  ============================================================= */
+  function initAmenazasHeading() {
+    const wrapper = document.querySelector(".amenazas-heading-panel");
+    const text = document.getElementById("amenazasHeading");
+    if (!wrapper || !text) return;
+
+    if (REDUCED) return;
+
+    if (window.innerWidth < 700) {
+      const fullText = text.textContent.trim();
+      ScrollTrigger.create({
+        trigger: wrapper,
+        start: "top 75%",
+        once: true,
+        onEnter: () => scrambleReveal(text, fullText),
+      });
+      return;
+    }
+
+    const split = new SplitText(text, { type: "chars, words" });
+
+    const scrollTween = gsap.to(text, {
+      xPercent: -100,
+      ease: "none",
+      scrollTrigger: {
+        trigger: wrapper,
+        pin: true,
+        end: "+=3500",
+        scrub: true,
+      },
+    });
+
+    split.chars.forEach((char) => {
+      gsap.from(char, {
+        yPercent: () => gsap.utils.random(-200, 200),
+        rotation: () => gsap.utils.random(-20, 20),
+        autoAlpha: 0,
+        ease: "back.out(1.2)",
+        scrollTrigger: {
+          trigger: char,
+          containerAnimation: scrollTween,
+          start: "left 100%",
+          end: "left 30%",
+          scrub: 1,
+        },
+      });
+    });
+  }
+
+  /* ============================================================
+     9. AMENAZAS — mini animaciones SVG por tarjeta (loops)
+  ============================================================= */
   function threatRansomware() {
     const scope = document.querySelector('[data-anim="ransomware"]');
     if (!scope) return;
     const lines = scope.querySelectorAll("#rw-lines line");
     const lock = scope.querySelector("#rw-lock");
     const tl = gsap.timeline({ repeat: -1, repeatDelay: 0.8 });
-    tl.to(lines, { stroke: "#FF6B4A", duration: 0.3, stagger: 0.12 })
-      .to(lines, { attr: { x2: (i, t) => 80 + Math.random() * 40 }, duration: 0.2, repeat: 3, yoyo: true }, "<")
+    tl.to(lines, { stroke: "#C4694A", duration: 0.3, stagger: 0.12 })
+      .to(lines, { attr: { x2: () => 80 + Math.random() * 40 }, duration: 0.2, repeat: 3, yoyo: true }, "<")
       .to(lock, { opacity: 1, y: -4, duration: 0.4, ease: "back.out(2)" })
       .to({}, { duration: 0.6 })
       .to(lock, { opacity: 0, duration: 0.4 })
-      .to(lines, { stroke: "#5EEAD4", attr: { x2: (i) => (i === 2 ? 108 : 120) }, duration: 0.4 });
+      .to(lines, { stroke: "#6FBDB0", attr: { x2: (i) => (i === 2 ? 108 : 120) }, duration: 0.4 });
   }
 
-  // b) DDoS: paquetes -> servidor parpadea rojo -> escudo -> rebote
   function threatDDoS() {
     const scope = document.querySelector('[data-anim="ddos"]');
     if (!scope) return;
@@ -394,7 +519,7 @@
 
     const tl = gsap.timeline({ repeat: -1, repeatDelay: 0.6 });
     tl.to(packets, { attr: { cx: 100, cy: 75 }, duration: 0.7, ease: "power1.in", stagger: 0.05 })
-      .to(server, { stroke: "#FF6B4A", duration: 0.15, repeat: 3, yoyo: true }, "<0.3")
+      .to(server, { stroke: "#C4694A", duration: 0.15, repeat: 3, yoyo: true }, "<0.3")
       .set(shield, { opacity: 1, scale: 0.6, transformOrigin: "100px 75px" })
       .to(shield, { scale: 1, duration: 0.3, ease: "back.out(2)" })
       .to(packets, {
@@ -403,10 +528,9 @@
         ease: "power2.out",
       })
       .to(shield, { opacity: 0, duration: 0.3 })
-      .to(server, { stroke: "#5EEAD4", duration: 0.2 }, "<");
+      .to(server, { stroke: "#6FBDB0", duration: 0.2 }, "<");
   }
 
-  // c) Port Scanning: scanner recorre puertos, los ilumina, EcoSentinel bloquea
   function threatPortScan() {
     const scope = document.querySelector('[data-anim="portscan"]');
     if (!scope) return;
@@ -416,14 +540,13 @@
     const tl = gsap.timeline({ repeat: -1, repeatDelay: 0.7 });
     xs.forEach((x, i) => {
       tl.to(scanner, { attr: { x1: x, x2: x }, duration: 0.35, ease: "power1.inOut" })
-        .to(ports[i], { stroke: "#FF6B4A", duration: 0.15 }, "<0.1");
+        .to(ports[i], { stroke: "#C4694A", duration: 0.15 }, "<0.1");
     });
-    tl.to(scanner, { stroke: "#0EA5A6", duration: 0.2 })
-      .to(ports, { stroke: "#5EEAD4", duration: 0.4, stagger: 0.05 })
-      .to(scanner, { stroke: "#FF6B4A", duration: 0.2 });
+    tl.to(scanner, { stroke: "#2F8F86", duration: 0.2 })
+      .to(ports, { stroke: "#6FBDB0", duration: 0.4, stagger: 0.05 })
+      .to(scanner, { stroke: "#C4694A", duration: 0.2 });
   }
 
-  // d) Botnet: dispositivos se infectan, forman red hacia C&C, EcoSentinel aísla
   function threatBotnet() {
     const scope = document.querySelector('[data-anim="botnet"]');
     if (!scope) return;
@@ -431,15 +554,14 @@
     const links = scope.querySelector("#bn-links");
     const cnc = scope.querySelector("#bn-cnc");
     const tl = gsap.timeline({ repeat: -1, repeatDelay: 0.8 });
-    tl.to(devices, { stroke: "#FF6B4A", duration: 0.3, stagger: 0.25 })
+    tl.to(devices, { stroke: "#C4694A", duration: 0.3, stagger: 0.25 })
       .to(links, { opacity: 1, duration: 0.3 }, "<0.2")
-      .to(cnc, { stroke: "#FF6B4A", scale: 1.1, transformOrigin: "100px 125px", duration: 0.2, repeat: 2, yoyo: true })
+      .to(cnc, { stroke: "#C4694A", scale: 1.1, transformOrigin: "100px 125px", duration: 0.2, repeat: 2, yoyo: true })
       .to({}, { duration: 0.4 })
-      .to(links, { opacity: 0, duration: 0.3 }) // EcoSentinel corta las conexiones
-      .to(devices, { stroke: "#5EEAD4", duration: 0.4, stagger: 0.1 });
+      .to(links, { opacity: 0, duration: 0.3 })
+      .to(devices, { stroke: "#6FBDB0", duration: 0.4, stagger: 0.1 });
   }
 
-  // e) Brute Force: intentos rápidos + contador -> bloqueo con candado
   function threatBruteForce() {
     const scope = document.querySelector('[data-anim="brute"]');
     if (!scope) return;
@@ -453,7 +575,7 @@
     const tl = gsap.timeline({ repeat: -1, repeatDelay: 0.7 });
     tl.set(state, { n: 0 })
       .set(lock, { opacity: 0, y: 0 })
-      .set(text, { fill: "#FF6B4A" })
+      .set(text, { fill: "#C4694A" })
       .to(state, {
         n: 248,
         duration: 1.6,
@@ -464,11 +586,10 @@
         },
       })
       .to(lock, { opacity: 1, y: -3, duration: 0.4, ease: "back.out(2)" })
-      .set(text, { fill: "#0EA5A6" })
+      .set(text, { fill: "#2F8F86" })
       .to({}, { duration: 0.6 });
   }
 
-  // f) Spoofing: impostor con misma IP intenta suplantar, EcoSentinel lo marca
   function threatSpoofing() {
     const scope = document.querySelector('[data-anim="spoofing"]');
     if (!scope) return;
@@ -479,14 +600,115 @@
     tl.set(arrow, { opacity: 0, attr: { d: "M120 70 L120 70" } })
       .set(flag, { opacity: 0 })
       .to(arrow, { opacity: 1, attr: { d: "M120 70 L95 70" }, duration: 0.6, ease: "power2.out" })
-      .to(fake, { stroke: "#FF6B4A", strokeWidth: 3.5, duration: 0.2, repeat: 3, yoyo: true })
+      .to(fake, { stroke: "#C4694A", strokeWidth: 3.5, duration: 0.2, repeat: 3, yoyo: true })
       .to(flag, { opacity: 1, duration: 0.4, ease: "back.out(2)" })
       .to({}, { duration: 0.7 })
       .to([arrow, flag], { opacity: 0, duration: 0.4 });
   }
 
+  function initThreatMiniLoops() {
+    if (REDUCED) return;
+    threatRansomware();
+    threatDDoS();
+    threatPortScan();
+    threatBotnet();
+    threatBruteForce();
+    threatSpoofing();
+  }
+
   /* ============================================================
-     8. CÓMO FUNCIONA — pipeline con relleno por scroll + flow dot
+     10. AMENAZAS — carrusel de tarjetas en bucle continuo
+        (adaptado de "CARTAS DE AMENAZAS": loop sin costuras;
+        estático, solo avanza con Siguiente/Anterior o al tocar
+        una tarjeta)
+  ============================================================= */
+  function buildSeamlessLoop(items, spacing, animateFunc) {
+    let overlap = Math.ceil(1 / spacing),
+      startTime = items.length * spacing + 0.5,
+      loopTime = (items.length + overlap) * spacing + 1,
+      rawSequence = gsap.timeline({ paused: true }),
+      seamlessLoop = gsap.timeline({
+        paused: true,
+        repeat: -1,
+        onRepeat() {
+          this._time === this._dur && (this._tTime += this._dur - 0.01);
+        },
+      }),
+      l = items.length + overlap * 2,
+      time,
+      i,
+      index;
+
+    for (i = 0; i < l; i++) {
+      index = i % items.length;
+      time = i * spacing;
+      rawSequence.add(animateFunc(items[index]), time);
+      i <= items.length && seamlessLoop.add("label" + i, time);
+    }
+
+    rawSequence.time(startTime);
+    seamlessLoop
+      .to(rawSequence, { time: loopTime, duration: loopTime - startTime, ease: "none" })
+      .fromTo(
+        rawSequence,
+        { time: overlap * spacing + 1 },
+        { time: startTime, duration: startTime - (overlap * spacing + 1), immediateRender: false, ease: "none" }
+      );
+    return seamlessLoop;
+  }
+
+  function buildCardsCarousel() {
+    const cardsList = document.querySelector(".cards");
+    const cards = gsap.utils.toArray(".cards li.threat-card");
+    if (!cards.length) return;
+
+    if (REDUCED) {
+      if (cardsList) cardsList.classList.add("static-grid");
+      gsap.set(cards, { clearProps: "all" });
+      return;
+    }
+
+    gsap.set(cards, { xPercent: 400, opacity: 0, scale: 0 });
+
+    const spacing = 0.15;
+    const animateFunc = (element) => {
+      const tl = gsap.timeline();
+      tl.fromTo(
+        element,
+        { scale: 0, opacity: 0 },
+        { scale: 1, opacity: 1, zIndex: 100, duration: 0.5, yoyo: true, repeat: 1, ease: "power1.in", immediateRender: false }
+      ).fromTo(element, { xPercent: 400 }, { xPercent: -400, duration: 1, ease: "none", immediateRender: false }, 0);
+      return tl;
+    };
+
+    const seamlessLoop = buildSeamlessLoop(cards, spacing, animateFunc);
+    const playhead = { offset: 0 };
+    const wrapTime = gsap.utils.wrap(0, seamlessLoop.duration());
+
+    const scrub = gsap.to(playhead, {
+      offset: 0,
+      onUpdate() {
+        seamlessLoop.time(wrapTime(playhead.offset));
+      },
+      duration: 0.6,
+      ease: "power2.out",
+      paused: true,
+    });
+
+    function goTo(steps) {
+      scrub.vars.offset += steps * spacing;
+      scrub.invalidate().restart();
+    }
+
+    document.getElementById("cardsNext")?.addEventListener("click", () => goTo(1));
+    document.getElementById("cardsPrev")?.addEventListener("click", () => goTo(-1));
+    cards.forEach((card) => {
+      card.addEventListener("click", () => goTo(1));
+    });
+  }
+
+  /* ============================================================
+     11. CÓMO FUNCIONA — pipeline con relleno por scroll + flow dot
   ============================================================= */
   function initPipeline() {
     const section = document.getElementById("como-funciona");
@@ -503,7 +725,6 @@
       return;
     }
 
-    // Relleno progresivo de la línea con scrub
     if (fill) {
       gsap.to(fill, {
         [isMobile ? "height" : "width"]: "100%",
@@ -512,7 +733,6 @@
       });
     }
 
-    // Activación secuencial de cada nodo
     nodes.forEach((node, i) => {
       const desc = node.querySelector(".pdesc");
       ScrollTrigger.create({
@@ -534,7 +754,6 @@
       });
     });
 
-    // Punto de datos que viaja infinitamente por el pipeline
     if (flowDot) {
       gsap.set(flowDot, isMobile ? { top: "0%", left: "50%" } : { left: "0%" });
       gsap.to(flowDot, {
@@ -547,106 +766,99 @@
   }
 
   /* ============================================================
-     9. MÉTRICAS — anillos circulares, reducción FN y barras comparativas
+     12. ¿POR QUÉ NOSOTROS? — estadísticas reales de ciberataques
   ============================================================= */
-  function initMetrics() {
-    const section = document.getElementById("metricas");
+  function initWhyUs() {
+    const section = document.getElementById("porque-nosotros");
     if (!section) return;
 
-    const rings = gsap.utils.toArray(".ring");
-    const R = 52;
-    const CIRC = 2 * Math.PI * R;
-
-    rings.forEach((ring) => {
-      const bar = ring.querySelector(".bar");
-      const valueEl = ring.querySelector(".ring-value");
-      const pct = parseFloat(ring.getAttribute("data-ring"));
-      const display = ring.getAttribute("data-display");
-      gsap.set(bar, { strokeDasharray: CIRC, strokeDashoffset: CIRC });
-
+    function animateCount(el) {
+      const target = parseFloat(el.getAttribute("data-count"));
+      const decimals = parseInt(el.getAttribute("data-decimals") || "0", 10);
+      const suffix = el.getAttribute("data-suffix") || "";
+      const prefix = el.getAttribute("data-prefix") || "";
       if (REDUCED) {
-        gsap.set(bar, { strokeDashoffset: CIRC * (1 - pct / 100) });
-        valueEl.textContent = display;
+        el.textContent = formatCount(target, decimals, prefix, suffix);
         return;
       }
-
-      ScrollTrigger.create({
-        trigger: section,
-        start: "top 70%",
-        once: true,
-        onEnter: () => {
-          gsap.to(bar, { strokeDashoffset: CIRC * (1 - pct / 100), duration: 1.6, ease: "power2.out" });
-          // contador de la etiqueta
-          const isDecimal = display.indexOf(".") === 0 || display.startsWith("0.");
-          const obj = { v: 0 };
-          const targetNum = parseFloat(display);
-          gsap.to(obj, {
-            v: targetNum,
-            duration: 1.6,
-            ease: "power2.out",
-            snap: { v: isDecimal ? 0.0001 : 0.01 },
-            onUpdate() {
-              valueEl.textContent = isDecimal
-                ? obj.v.toFixed(4)
-                : obj.v.toFixed(2) + (display.includes("%") ? "%" : "");
-            },
-            onComplete() {
-              valueEl.textContent = display;
-            },
-          });
+      const obj = { v: 0 };
+      gsap.to(obj, {
+        v: target,
+        duration: 1.8,
+        ease: "power2.out",
+        onUpdate() {
+          el.textContent = formatCount(obj.v, decimals, prefix, suffix);
+        },
+        onComplete() {
+          el.textContent = formatCount(target, decimals, prefix, suffix);
         },
       });
-    });
-
-    // Reducción de falsos negativos (número que "cuenta")
-    const fn = section.querySelector("[data-fn]");
-    if (fn) {
-      const target = parseFloat(fn.getAttribute("data-fn"));
-      if (REDUCED) {
-        fn.textContent = "-" + target + "%";
-      } else {
-        ScrollTrigger.create({
-          trigger: section,
-          start: "top 65%",
-          once: true,
-          onEnter: () => {
-            const obj = { v: 0 };
-            gsap.to(obj, {
-              v: target,
-              duration: 1.8,
-              ease: "power2.out",
-              snap: { v: 0.1 },
-              onUpdate() {
-                fn.textContent = "-" + obj.v.toFixed(1) + "%";
-              },
-            });
-          },
-        });
-      }
     }
 
-    // Barras comparativas antes/después
-    const bars = gsap.utils.toArray(".bar-inner");
-    bars.forEach((bar) => {
-      const width = bar.getAttribute("data-width");
-      const value = bar.getAttribute("data-value");
-      bar.textContent = value;
+    function animateGrowth() {
+      const el = section.querySelector("[data-growth]");
+      if (!el) return;
+      const target = parseFloat(el.getAttribute("data-growth"));
       if (REDUCED) {
-        gsap.set(bar, { width: width + "%" });
+        el.textContent = "+" + target + "%";
         return;
       }
-      gsap.set(bar, { width: "0%" });
-      ScrollTrigger.create({
-        trigger: section,
-        start: "top 60%",
-        once: true,
-        onEnter: () => gsap.to(bar, { width: width + "%", duration: 1.4, ease: "power2.out" }),
+      const obj = { v: 0 };
+      gsap.to(obj, {
+        v: target,
+        duration: 1.8,
+        ease: "power2.out",
+        snap: { v: 1 },
+        onUpdate() {
+          el.textContent = "+" + Math.round(obj.v) + "%";
+        },
       });
+    }
+
+    function animateBars() {
+      section.querySelectorAll(".bar-inner").forEach((bar) => {
+        const width = bar.getAttribute("data-width");
+        const value = bar.getAttribute("data-value");
+        bar.textContent = value;
+        if (REDUCED) {
+          gsap.set(bar, { width: width + "%" });
+          return;
+        }
+        gsap.set(bar, { width: "0%" });
+        gsap.to(bar, { width: width + "%", duration: 1.4, ease: "power2.out", delay: 0.2 });
+      });
+    }
+
+    function playReveal() {
+      section.querySelectorAll(".why-value").forEach(animateCount);
+      animateGrowth();
+      animateBars();
+    }
+
+    if (REDUCED) {
+      playReveal();
+      return;
+    }
+
+    ScrollTrigger.create({
+      trigger: section,
+      start: "top 70%",
+      once: true,
+      onEnter: playReveal,
+    });
+
+    gsap.from(section.querySelectorAll(".why-stat"), {
+      y: 40,
+      opacity: 0,
+      duration: 0.6,
+      ease: "power3.out",
+      stagger: 0.1,
+      scrollTrigger: { trigger: section, start: "top 75%" },
     });
   }
 
   /* ============================================================
-     10. PRECIOS — entrada con stagger + hover con GSAP
+     13. PRECIOS — entrada con stagger + hover con GSAP
   ============================================================= */
   function initPricing() {
     const cards = gsap.utils.toArray(".price-card");
@@ -665,14 +877,13 @@
 
     cards.forEach((card) => {
       const featured = card.classList.contains("featured");
-      const baseScale = featured ? 1.0 : 1.0;
       card.addEventListener("mouseenter", () => {
         if (REDUCED) return;
-        gsap.to(card, { y: -10, scale: 1.03, boxShadow: "0 22px 50px rgba(0,0,0,0.35)", duration: 0.3, ease: "power2.out" });
+        gsap.to(card, { y: -10, scale: 1.03, boxShadow: "0 22px 50px rgba(0,0,0,0.5)", duration: 0.3, ease: "power2.out" });
       });
       card.addEventListener("mouseleave", () => {
         if (REDUCED) return;
-        gsap.to(card, { y: 0, scale: baseScale, boxShadow: featured ? "var(--shadow-teal)" : "none", duration: 0.3, ease: "power2.out" });
+        gsap.to(card, { y: 0, scale: 1, boxShadow: featured ? "var(--shadow-teal)" : "none", duration: 0.3, ease: "power2.out" });
       });
     });
   }
@@ -682,15 +893,19 @@
   ============================================================= */
   function init() {
     initNavbar();
-    initSmoothScroll();
-    initHeroText();
+    initHeroScramble();
+    initSectionScrambles();
     initCounters();
-    initHeroParallax();
     initHeroCanvas();
-    initThreatCards();
+    initHeroParallax();
+    initAmenazasCanvas();
+    initAmenazasHeading();
+    initThreatMiniLoops();
+    buildCardsCarousel();
     initPipeline();
-    initMetrics();
+    initWhyUs();
     initPricing();
+    initSmoothScroll();
     ScrollTrigger.refresh();
   }
 

@@ -3,9 +3,15 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="theme-color" content="#0A1F33" />
+    <meta name="theme-color" content="#0A0F14" />
     <meta name="description" content="Panel de monitoreo EcoSentinel — estado del appliance, alertas y estadísticas de tu red en tiempo real." />
     <title>Dashboard — EcoSentinel</title>
+
+    <!-- Favicon -->
+    <link rel="icon" href="icon.svg" type="image/svg+xml" />
+    <link rel="icon" href="icon-dark-32x32.png" sizes="32x32" media="(prefers-color-scheme: dark)" />
+    <link rel="icon" href="icon-light-32x32.png" sizes="32x32" media="(prefers-color-scheme: light)" />
+    <link rel="apple-touch-icon" href="apple-icon.png" />
 
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -38,7 +44,10 @@
     <main class="dash-main">
       <div class="container">
         <div class="dash-title-row">
-          <h1>Estado de tu red</h1>
+          <div class="dash-title-main">
+            <h1>Estado de tu red</h1>
+            <span class="profile-badge" id="profileBadge">Perfil: Intermedio</span>
+          </div>
           <span class="status-pill online" id="statusPill">
             <span class="dot"></span> Appliance conectado
           </span>
@@ -91,6 +100,35 @@
           </div>
         </div>
 
+        <!-- POSTURA DE SEGURIDAD + RECOMENDACIONES (según perfil) -->
+        <div class="posture-grid">
+          <div class="panel posture-panel">
+            <div class="panel-head">
+              <h3>Postura de seguridad</h3>
+            </div>
+            <div class="posture-body">
+              <div class="posture-ring">
+                <svg viewBox="0 0 120 120">
+                  <circle class="track" cx="60" cy="60" r="52" />
+                  <circle class="bar" id="postureBar" cx="60" cy="60" r="52" />
+                </svg>
+                <div class="posture-value-wrap">
+                  <div class="posture-value" id="postureValue">0%</div>
+                </div>
+              </div>
+              <p class="posture-hint">Marca las recomendaciones que ya aplicas en tu red para mejorar tu puntaje.</p>
+            </div>
+          </div>
+
+          <div class="panel recommendations-panel">
+            <div class="panel-head">
+              <h3>Recomendaciones para tu red</h3>
+              <span class="live" id="recoCount">0/4 aplicadas</span>
+            </div>
+            <ul class="reco-list" id="recoList"><!-- inyectado por dashboard.js --></ul>
+          </div>
+        </div>
+
         <!-- COLUMNAS: alertas + gráfico -->
         <div class="dash-columns">
           <!-- Feed de alertas -->
@@ -127,10 +165,21 @@
             </div>
           </div>
         </div>
+
+        <!-- DISTRIBUCIÓN DE AMENAZAS -->
+        <div class="panel distribution-panel">
+          <div class="panel-head">
+            <h3>Distribución de amenazas detectadas (30 días)</h3>
+          </div>
+          <div class="distribution-body">
+            <canvas id="distChart" width="220" height="220" aria-label="Distribución de amenazas por tipo"></canvas>
+            <ul class="distribution-legend" id="distLegend"><!-- inyectado por dashboard.js --></ul>
+          </div>
+        </div>
       </div>
     </main>
 
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.13.0/gsap.min.js"></script>
     <script src="js/dashboard.js"></script>
   </body>
 </html>

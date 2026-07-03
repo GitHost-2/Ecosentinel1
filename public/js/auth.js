@@ -14,13 +14,19 @@
   const overlays = {
     login: document.getElementById("loginOverlay"),
     register: document.getElementById("registerOverlay"),
+    quiz: document.getElementById("quizOverlay"),
   };
   const modals = {
     login: document.getElementById("loginModal"),
     register: document.getElementById("registerModal"),
+    quiz: document.getElementById("quizModal"),
   };
 
   let lastFocused = null;
+  // Datos de registro a la espera de que se responda el cuestionario
+  // de perfil (ver initQuiz). Si el usuario cierra el cuestionario sin
+  // responder, se completa el registro con un perfil por defecto.
+  let pendingRegistration = null;
 
   /* ---------- Abrir / cerrar con animación GSAP ---------- */
   function openModal(name) {
@@ -51,6 +57,12 @@
       overlay.classList.remove("open");
       document.body.style.overflow = "";
       if (lastFocused) lastFocused.focus();
+      // Si cierran el cuestionario sin responderlo, no dejamos al
+      // usuario atorado: completamos el registro con un perfil por
+      // defecto para que pueda entrar a su panel de todas formas.
+      if (name === "quiz" && pendingRegistration) {
+        finishRegistration("intermedio");
+      }
     };
 
     if (REDUCED) {
@@ -132,6 +144,36 @@
     }
   }
 
+  /* ---------- Perfil de conocimiento (cuestionario) ----------
+     Se guarda por correo en localStorage para que, en esta demo,
+     una misma cuenta conserve su perfil entre sesiones. */
+  function profileKey(email) {
+    return "ecosentinel_profile_" + email.trim().toLowerCase();
+  }
+  function saveProfile(email, profile) {
+    try {
+      localStorage.setItem(profileKey(email), profile);
+    } catch (err) {
+      /* almacenamiento no disponible */
+    }
+  }
+  function loadProfile(email) {
+    try {
+      return localStorage.getItem(profileKey(email));
+    } catch (err) {
+      return null;
+    }
+  }
+
+  function finishRegistration(profile) {
+    if (!pendingRegistration) return;
+    const data = { ...pendingRegistration, profile };
+    pendingRegistration = null;
+    saveProfile(data.email, profile);
+    saveSession(data);
+    redirectToDashboard();
+  }
+
   /* ---------- Login ---------- */
   const loginForm = document.getElementById("loginForm");
   if (loginForm) {
@@ -156,7 +198,8 @@
       }
 
       const company = email.split("@")[0].replace(/[._-]+/g, " ");
-      saveSession({ company: company || "Mi Empresa", email, plan: "Pro" });
+      const profile = loadProfile(email) || "intermedio";
+      saveSession({ company: company || "Mi Empresa", email, plan: "Pro", profile });
       redirectToDashboard();
     });
   }
@@ -195,8 +238,22 @@
         return;
       }
 
-      saveSession({ company, email, plan });
-      redirectToDashboard();
+      pendingRegistration = { company, email, plan };
+      closeModal("register");
+      setTimeout(() => openModal("quiz"), REDUCED ? 0 : 220);
+    });
+  }
+
+  /* ---------- Cuestionario de perfil ---------- */
+  const quizForm = document.getElementById("quizForm");
+  if (quizForm) {
+    quizForm.addEventListener("submit", (e) => {
+      e.preventDefault();
+      if (!pendingRegistration) return;
+      const data = new FormData(quizForm);
+      const score = ["q1", "q2", "q3"].reduce((sum, key) => sum + (parseInt(data.get(key), 10) || 2), 0);
+      const profile = score <= 4 ? "principiante" : score <= 7 ? "intermedio" : "avanzado";
+      finishRegistration(profile);
     });
   }
 
