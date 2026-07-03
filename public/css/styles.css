@@ -1399,22 +1399,27 @@ html.observer-mode body {
 .s-amenazas .bg {
   background: var(--gray-dark-1);
   flex-direction: column;
-  gap: 24px;
-  padding-top: 80px;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
 }
 
 /* Como funciona panel */
 .s-como-funciona .bg {
   background: var(--gray-dark-2);
-  padding: 80px 0 40px;
   overflow-y: auto;
+  align-items: flex-start;
+  justify-content: flex-start;
+  padding: 88px 0 40px;
 }
 
 /* Por qué nosotros panel */
 .s-por-que .bg {
   background: var(--gray-dark-1);
-  padding: 80px 0 40px;
   overflow-y: auto;
+  align-items: flex-start;
+  justify-content: flex-start;
+  padding: 88px 0 40px;
 }
 
 /* Precios panel */
@@ -1424,9 +1429,8 @@ html.observer-mode body {
   overflow-y: auto;
   flex-direction: column;
   justify-content: flex-start;
-  padding-top: 80px;
-  padding-bottom: 40px;
   align-items: stretch;
+  padding: 88px 0 40px;
 }
 
 /* ============================================================
@@ -1534,9 +1538,10 @@ html.observer-mode body {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 20px;
-  padding: 80px 16px 20px;
+  gap: 16px;
+  padding: 72px 16px 16px;
   overflow: hidden;
+  box-sizing: border-box;
 }
 
 .cards-header {
@@ -1557,17 +1562,21 @@ html.observer-mode body {
 
 .cards-stage {
   position: relative;
-  width: min(380px, 90vw);
+  width: min(400px, 90vw);
   flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
 }
 
 .cards-deck {
   position: relative;
-  width: min(380px, 90vw);
-  height: min(380px, 65vw);
+  width: min(400px, 90vw);
+  height: clamp(260px, 42vh, 420px);
   list-style: none;
   margin: 0;
   padding: 0;
+  overflow: visible;
 }
 
 /* Cards inside the deck */
@@ -1579,9 +1588,8 @@ html.observer-mode body {
   box-sizing: border-box;
   transform-origin: center center;
   will-change: transform, opacity;
-  /* Card now adapts height automatically */
-  height: auto;
-  min-height: 100%;
+  height: 100%;
+  overflow-y: auto;
 }
 
 .cards-nav {
@@ -1849,12 +1857,18 @@ html.observer-mode body {
   }
 
   .cards-gallery {
-    padding: 70px 12px 12px;
-    gap: 12px;
+    padding: 65px 12px 8px;
+    gap: 10px;
+    justify-content: center;
   }
 
   .cards-deck {
-    height: min(340px, 70vw);
+    height: clamp(240px, 50vh, 330px);
+    width: min(340px, 90vw);
+  }
+
+  .cards-stage {
+    width: min(340px, 90vw);
   }
 
   .pq-grid {

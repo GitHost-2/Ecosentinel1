@@ -202,7 +202,9 @@
     const navbar = document.getElementById("navbar");
     if (navbar) navbar.classList.toggle("scrolled", index > 0);
 
-    if (sectionInitialized[index]) return;
+    // Hero (0), pipeline (3), and cards (2) run once — stats (4) and precios (5) replay
+    const runOnce = index === 0 || index === 2 || index === 3;
+    if (runOnce && sectionInitialized[index]) return;
     sectionInitialized[index] = true;
 
     switch (index) {
@@ -469,75 +471,106 @@
   }
 
   /* ============================================================
-     6. THREAT CARDS — Infinite draggable carousel (RwKwLWK)
+     6. THREAT CARDS — Stacked deck carousel
+        (RwKwLWK spirit: snap, drag, infinite, smooth)
   ============================================================= */
   function initCardsOnEnter() {
-    const deck = document.getElementById("threatCardsDeck");
-    if (!deck) return;
-
-    const cards   = gsap.utils.toArray(".cards-deck .threat-card");
+    const cards = gsap.utils.toArray(".cards-deck .threat-card");
     if (!cards.length) return;
 
-    const spacing  = 0.15;
-    const snapTime = gsap.utils.snap(spacing);
-
-    const animateFunc = (el) => {
-      const tl = gsap.timeline();
-      tl.fromTo(el,
-        { scale: 0, opacity: 0 },
-        { scale: 1, opacity: 1, zIndex: 100, duration: 0.5, yoyo: true, repeat: 1, ease: "power1.in", immediateRender: false }
-      ).fromTo(el,
-        { xPercent: 400 },
-        { xPercent: -400, duration: 1, ease: "none", immediateRender: false },
-        0
-      );
-      return tl;
-    };
-
-    const seamlessLoop  = buildSeamlessLoop(cards, spacing, animateFunc);
-    const wrapTime      = gsap.utils.wrap(0, seamlessLoop.duration());
-    const playhead      = { offset: 0 };
-
-    const scrub = gsap.to(playhead, {
-      offset: 0,
-      onUpdate() { seamlessLoop.time(wrapTime(playhead.offset)); },
-      duration: 0.5,
-      ease: "power3",
-      paused: true,
-    });
-
+    const total     = cards.length;
+    let current     = 0;
+    let animating   = false;
     const counterEl = document.getElementById("cardsCurrentNum");
 
-    function scrollToOffset(offset) {
-      const snapped   = snapTime(offset);
-      const totalDur  = seamlessLoop.duration();
-      const progress  = ((snapped % totalDur) + totalDur) % totalDur / totalDur;
-      const cardIndex = Math.round(progress * cards.length) % cards.length;
-      if (counterEl) counterEl.textContent = cardIndex + 1;
-
-      scrub.vars.offset = snapped;
-      scrub.invalidate().restart();
+    /* ---- Initial layout: stack cards with slight Y+scale offset ---- */
+    function layoutCards(activeIdx, instant) {
+      cards.forEach((card, i) => {
+        const offset  = ((i - activeIdx) % total + total) % total; // 0=active,1=next,2=next+1...
+        const behind  = offset === 0 ? 0 : (offset <= total / 2 ? offset : offset - total);
+        // Clamp visible behind cards to 3 max
+        const depth   = Math.min(Math.abs(behind), 3);
+        const isFront = offset === 0;
+        const props   = {
+          zIndex:   total - depth,
+          scale:    isFront ? 1 : 1 - depth * 0.04,
+          y:        isFront ? 0 : depth * 10,
+          opacity:  isFront ? 1 : Math.max(0, 1 - depth * 0.35),
+          rotateZ:  isFront ? 0 : (behind < 0 ? -depth * 1.5 : depth * 1.5),
+          immediateRender: true,
+        };
+        if (instant) {
+          gsap.set(card, props);
+        } else {
+          gsap.to(card, { ...props, duration: 0.5, ease: "power2.out" });
+        }
+      });
+      if (counterEl) counterEl.textContent = activeIdx + 1;
     }
 
-    // Buttons
+    /* ---- Navigate to card ---- */
+    function goTo(newIdx, dir) {
+      if (animating) return;
+      animating = true;
+      const prev     = current;
+      current        = ((newIdx % total) + total) % total;
+      const prevCard = cards[prev];
+      const nextCard = cards[current];
+
+      // Fly out previous card in the direction of navigation
+      gsap.to(prevCard, {
+        xPercent: dir > 0 ? -130 : 130,
+        opacity:  0,
+        duration: 0.42,
+        ease:     "power2.in",
+        onComplete() {
+          gsap.set(prevCard, { xPercent: dir > 0 ? 130 : -130 });
+          layoutCards(current, false);
+          gsap.to(prevCard, { xPercent: 0, duration: 0 }); // reset off-screen silently
+          animating = false;
+        },
+      });
+    }
+
+    // Initial layout — instant
+    layoutCards(0, true);
+
+    // Button handlers
     const nextBtn = document.getElementById("cardsNext");
     const prevBtn = document.getElementById("cardsPrev");
-    if (nextBtn) nextBtn.addEventListener("click", () => scrollToOffset(playhead.offset + spacing));
-    if (prevBtn) prevBtn.addEventListener("click", () => scrollToOffset(playhead.offset - spacing));
+    if (nextBtn) nextBtn.addEventListener("click", () => { if (!animating) goTo(current + 1,  1); });
+    if (prevBtn) prevBtn.addEventListener("click", () => { if (!animating) goTo(current - 1, -1); });
 
-    // Draggable for touch/mouse
+    // Drag support via Draggable on the deck itself
+    let dragStartX = 0;
+    let dragging   = false;
+
     Draggable.create(".drag-proxy", {
-      type: "x",
+      type:    "x",
       trigger: ".cards-deck",
-      onPress() { this.startOffset = playhead.offset; },
-      onDrag() {
-        scrub.vars.offset = this.startOffset + (this.startX - this.x) * 0.0015;
-        scrub.invalidate().restart();
+      onPress()    { dragStartX = this.x; dragging = true; },
+      onRelease()  {
+        if (!dragging) return;
+        dragging = false;
+        const delta = this.x - dragStartX;
+        if (Math.abs(delta) > 40) {
+          goTo(current + (delta < 0 ? 1 : -1), delta < 0 ? 1 : -1);
+        }
       },
-      onDragEnd() { scrollToOffset(scrub.vars.offset); },
     });
 
-    // Also init threat SVG animations while cards are visible
+    // Swipe on touch for the deck
+    let touchStartX = 0;
+    const deckEl    = document.getElementById("threatCardsDeck");
+    if (deckEl) {
+      deckEl.addEventListener("touchstart", (e) => { touchStartX = e.touches[0].clientX; }, { passive: true });
+      deckEl.addEventListener("touchend",   (e) => {
+        const delta = e.changedTouches[0].clientX - touchStartX;
+        if (Math.abs(delta) > 40) goTo(current + (delta < 0 ? 1 : -1), delta < 0 ? 1 : -1);
+      });
+    }
+
+    // Init threat SVG animations
     if (!REDUCED) {
       threatRansomware();
       threatDDoS();
@@ -546,35 +579,6 @@
       threatBruteForce();
       threatSpoofing();
     }
-  }
-
-  /* buildSeamlessLoop — verbatim from RwKwLWK CodePen */
-  function buildSeamlessLoop(items, spacing, animateFunc) {
-    const overlap     = Math.ceil(1 / spacing);
-    const startTime   = items.length * spacing + 0.5;
-    const loopTime    = (items.length + overlap) * spacing + 1;
-    const rawSequence = gsap.timeline({ paused: true });
-    const seamlessLoop= gsap.timeline({
-      paused: true,
-      repeat: -1,
-      onRepeat() { this._time === this._dur && (this._tTime += this._dur - 0.01); },
-    });
-    const l = items.length + overlap * 2;
-
-    for (let i = 0; i < l; i++) {
-      const index = i % items.length;
-      const time  = i * spacing;
-      rawSequence.add(animateFunc(items[index]), time);
-    }
-
-    rawSequence.time(startTime);
-    seamlessLoop
-      .to(rawSequence, { time: loopTime, duration: loopTime - startTime, ease: "none" })
-      .fromTo(rawSequence,
-        { time: overlap * spacing + 1 },
-        { time: startTime, duration: startTime - (overlap * spacing + 1), immediateRender: false, ease: "none" }
-      );
-    return seamlessLoop;
   }
 
   /* ============================================================
@@ -634,19 +638,51 @@
   ============================================================= */
   function initPorQueOnEnter() {
     const section = document.getElementById("por-que-nosotros");
-    if (!section || REDUCED) return;
+    if (!section) return;
+
+    // Reset bar heights to 0 for replay
+    section.querySelectorAll(".pq-bar-fill").forEach((bar) => {
+      gsap.set(bar, { height: "0%" });
+    });
+
+    // Reset counter text to 0
+    section.querySelectorAll("[data-pq-count]").forEach((el) => {
+      const prefix  = el.getAttribute("data-pq-prefix") || "";
+      const suffix  = el.getAttribute("data-pq-suffix") || "";
+      const decs    = parseInt(el.getAttribute("data-pq-decimals") || "0", 10);
+      el.textContent = prefix + (0).toFixed(decs) + suffix;
+    });
+
+    if (REDUCED) {
+      // Just set final values without animation
+      section.querySelectorAll("[data-pq-count]").forEach((el) => {
+        const target  = parseFloat(el.getAttribute("data-pq-count"));
+        const prefix  = el.getAttribute("data-pq-prefix") || "";
+        const suffix  = el.getAttribute("data-pq-suffix") || "";
+        const decs    = parseInt(el.getAttribute("data-pq-decimals") || "0", 10);
+        el.textContent = prefix + target.toFixed(decs) + suffix;
+      });
+      section.querySelectorAll(".pq-bar-fill").forEach((bar) => {
+        gsap.set(bar, { height: bar.getAttribute("data-height") + "%" });
+      });
+      return;
+    }
 
     // Animate section head
     const h2 = section.querySelector(".section-head h2");
-    if (h2) {
-      gsap.from(h2, { opacity: 0, y: 30, duration: 0.7, ease: "power2.out" });
-    }
+    if (h2) gsap.from(h2, { opacity: 0, y: 30, duration: 0.7, ease: "power2.out" });
+
+    const eyebrow = section.querySelector(".section-head .eyebrow");
+    if (eyebrow) gsap.from(eyebrow, { opacity: 0, y: 16, duration: 0.5, ease: "power2.out" });
+
+    const subP = section.querySelector(".section-head p");
+    if (subP) gsap.from(subP, { opacity: 0, y: 16, duration: 0.5, delay: 0.15, ease: "power2.out" });
 
     // Stat cards fly in
-    const stats = gsap.utils.toArray(".pq-stat");
+    const stats = section.querySelectorAll(".pq-stat");
     gsap.from(stats, {
       opacity: 0, y: 40, duration: 0.6, ease: "power3.out",
-      stagger: 0.1, delay: 0.2,
+      stagger: 0.1, delay: 0.25,
     });
 
     // Animated counters for stat values
@@ -659,27 +695,27 @@
 
       gsap.to(obj, {
         val: target,
-        duration: 2,
+        duration: 2.2,
         ease: "power2.out",
-        delay: 0.4,
+        delay: 0.45,
         snap: { val: decimals > 0 ? 0.01 : 1 },
         onUpdate: () => { el.textContent = prefix + obj.val.toFixed(decimals) + suffix; },
       });
     });
 
     // Bar chart animation
-    const bars = gsap.utils.toArray(".pq-bar-fill");
-    gsap.from(section.querySelector(".pq-chart-wrap"), {
-      opacity: 0, y: 30, duration: 0.6, ease: "power2.out", delay: 0.5,
-    });
+    const chartWrap = section.querySelector(".pq-chart-wrap");
+    if (chartWrap) {
+      gsap.from(chartWrap, { opacity: 0, y: 30, duration: 0.6, ease: "power2.out", delay: 0.55 });
+    }
 
-    bars.forEach((bar, i) => {
+    section.querySelectorAll(".pq-bar-fill").forEach((bar, i) => {
       const targetH = bar.getAttribute("data-height") + "%";
       gsap.to(bar, {
         height: targetH,
-        duration: 0.8,
+        duration: 0.9,
         ease: "power2.out",
-        delay: 0.7 + i * 0.08,
+        delay: 0.75 + i * 0.09,
       });
     });
   }
@@ -688,17 +724,18 @@
      9. PRECIOS CARDS — fly-in on enter
   ============================================================= */
   function initPreciosOnEnter() {
-    const cards = gsap.utils.toArray(".price-card");
-    if (!REDUCED && cards.length) {
-      gsap.from(cards, {
+    if (REDUCED) return;
+    const priceCards = gsap.utils.toArray(".price-card");
+    // Reset first so re-entry shows animation again
+    gsap.set(priceCards, { clearProps: "all" });
+    if (priceCards.length) {
+      gsap.from(priceCards, {
         y: 80, opacity: 0, duration: 0.8, ease: "power3.out",
-        stagger: 0.18, delay: 0.1,
+        stagger: 0.18, delay: 0.15,
       });
     }
     const h2 = document.querySelector("#precios .section-head h2");
-    if (h2) {
-      gsap.from(h2, { opacity: 0, y: 30, duration: 0.7, ease: "power2.out" });
-    }
+    if (h2) gsap.from(h2, { opacity: 0, y: 30, duration: 0.7, ease: "power2.out" });
   }
 
   /* ============================================================
