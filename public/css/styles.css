@@ -411,6 +411,7 @@ section {
   position: relative;
   z-index: 2;
   display: flex;
+  gap: 0.28em;
   width: max-content;
   white-space: nowrap;
   padding-left: 100vw;

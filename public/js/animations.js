@@ -447,11 +447,11 @@
     const wrapper = document.querySelector(".amenazas-heading-panel");
     const text = document.getElementById("amenazasHeading");
     if (!wrapper || !text) return;
+    const fullText = text.textContent.trim();
 
     if (REDUCED) return;
 
     if (window.innerWidth < 700) {
-      const fullText = text.textContent.trim();
       ScrollTrigger.create({
         trigger: wrapper,
         start: "top 75%",
@@ -461,6 +461,8 @@
       return;
     }
 
+    text.textContent = fullText;
+
     const split = new SplitText(text, { type: "chars, words" });
 
     const scrollTween = gsap.to(text, {
@@ -469,7 +471,7 @@
       scrollTrigger: {
         trigger: wrapper,
         pin: true,
-        end: "+=3500",
+        end: "+=1600",
         scrub: true,
       },
     });
