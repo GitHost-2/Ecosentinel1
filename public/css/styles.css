@@ -1335,6 +1335,20 @@ section {
   text-decoration: line-through;
 }
 
+/* ---------- Botón "Validar" (aparece al marcar recomendaciones) ---------- */
+.reco-validate-wrap {
+  padding: 16px 24px 22px;
+  border-top: 1px solid var(--border-soft);
+}
+.reco-validate-btn.validated {
+  background: var(--teal-light);
+  color: var(--bg-0);
+}
+.reco-validate-btn:disabled {
+  cursor: default;
+  opacity: 0.9;
+}
+
 /* ---------- Distribución de amenazas ---------- */
 .distribution-panel {
   margin-bottom: 28px;
@@ -1374,6 +1388,173 @@ section {
   margin-left: auto;
   padding-left: 14px;
   font-family: var(--font-head);
+}
+
+/* ---------- Amenazas activas en tu red (tarjetas) ---------- */
+.threats-panel {
+  margin-bottom: 28px;
+}
+.threats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 16px;
+  padding: 22px 24px;
+}
+.threat-mini-card {
+  background: var(--surface-2);
+  border: 1px solid var(--border-soft);
+  border-radius: 12px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  transition: border-color 0.2s ease;
+}
+.threat-mini-card.mitigated {
+  border-color: rgba(111, 189, 176, 0.35);
+}
+.tmc-head {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+.tmc-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.tmc-name {
+  font-family: var(--font-head);
+  font-weight: 600;
+  font-size: 0.92rem;
+  color: var(--text-1);
+}
+.tmc-count {
+  margin-left: auto;
+  font-family: var(--font-head);
+  font-weight: 700;
+  color: var(--gray);
+}
+.tmc-tips {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  overflow: hidden;
+}
+.tmc-tips li {
+  font-size: 0.82rem;
+  line-height: 1.5;
+  color: #c3cdd6;
+  padding-left: 14px;
+  position: relative;
+}
+.tmc-tips li::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0.55em;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--teal-light);
+}
+.tmc-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: auto;
+}
+.tmc-action {
+  flex: 1;
+  padding: 9px 12px;
+  font-size: 0.82rem;
+  border-radius: 8px;
+}
+.tmc-action:disabled {
+  cursor: default;
+  opacity: 0.75;
+}
+
+/* ============================================================
+   OVERLAY DE PROCESO — validar / mitigar
+   Misma animación del loader raíz (index.html): escudo pulsante +
+   barra de progreso, sobre el fondo difuminado del dashboard.
+   ============================================================ */
+.process-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 3000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(5, 8, 11, 0.72);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.3s ease, visibility 0.3s ease;
+  padding: 20px;
+}
+.process-overlay.open {
+  opacity: 1;
+  visibility: visible;
+}
+.process-loader {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 20px;
+  text-align: center;
+}
+.process-shield {
+  width: 60px;
+  height: 60px;
+  color: var(--teal);
+  animation: processPulse 1.6s ease-in-out infinite;
+}
+.process-shield svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+.process-shield .check {
+  stroke-dasharray: 20;
+  stroke-dashoffset: 20;
+  animation: processDraw 1.6s ease-in-out infinite;
+}
+@keyframes processPulse {
+  0%, 100% { transform: scale(1); filter: drop-shadow(0 0 0 rgba(47, 143, 134, 0)); }
+  50% { transform: scale(1.08); filter: drop-shadow(0 0 14px rgba(47, 143, 134, 0.55)); }
+}
+@keyframes processDraw {
+  0%, 30% { stroke-dashoffset: 20; }
+  60%, 100% { stroke-dashoffset: 0; }
+}
+.process-title {
+  font-family: var(--font-head);
+  font-size: 1.05rem;
+  font-weight: 600;
+  color: var(--text-1);
+  max-width: 30ch;
+}
+.process-bar-track {
+  width: 220px;
+  height: 3px;
+  border-radius: 3px;
+  background: rgba(230, 238, 244, 0.1);
+  overflow: hidden;
+}
+.process-bar-fill {
+  height: 100%;
+  width: 0%;
+  border-radius: 3px;
+  background: linear-gradient(90deg, var(--teal), var(--teal-light));
+}
+.process-status {
+  font-size: 0.8rem;
+  color: var(--gray);
+  min-height: 1.2em;
 }
 
 .dash-columns {

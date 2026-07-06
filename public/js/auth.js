@@ -40,7 +40,11 @@
       gsap.set([overlay, modal], { opacity: 1, scale: 1 });
     } else {
       gsap.fromTo(overlay, { opacity: 0 }, { opacity: 1, duration: 0.25, ease: "power1.out" });
-      gsap.from(modal, { opacity: 0, scale: 0.9, y: 20, duration: 0.35, ease: "back.out(1.6)" });
+      gsap.fromTo(
+        modal,
+        { opacity: 0, scale: 0.9, y: 20 },
+        { opacity: 1, scale: 1, y: 0, duration: 0.35, ease: "back.out(1.6)" }
+      );
     }
 
     const firstInput = modal.querySelector("input, select");

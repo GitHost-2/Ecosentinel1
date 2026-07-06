@@ -126,6 +126,9 @@
               <span class="live" id="recoCount">0/4 aplicadas</span>
             </div>
             <ul class="reco-list" id="recoList"><!-- inyectado por dashboard.js --></ul>
+            <div class="reco-validate-wrap" id="recoValidateWrap" hidden>
+              <button class="btn btn-teal btn-block reco-validate-btn" id="recoValidateBtn">Validar</button>
+            </div>
           </div>
         </div>
 
@@ -176,10 +179,35 @@
             <ul class="distribution-legend" id="distLegend"><!-- inyectado por dashboard.js --></ul>
           </div>
         </div>
+
+        <!-- AMENAZAS ACTIVAS EN LA RED -->
+        <div class="panel threats-panel">
+          <div class="panel-head">
+            <h3>Amenazas activas en tu red</h3>
+            <span class="live"><span class="dot"></span> Monitoreo continuo</span>
+          </div>
+          <div class="threats-grid" id="threatsGrid"><!-- inyectado por dashboard.js --></div>
+        </div>
       </div>
     </main>
 
+    <!-- OVERLAY: validación / mitigación (misma animación del loader de index.html) -->
+    <div class="process-overlay" id="processOverlay" role="alert" aria-live="assertive">
+      <div class="process-loader">
+        <div class="process-shield" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 2 4 5v6c0 5 3.5 8.5 8 11 4.5-2.5 8-6 8-11V5l-8-3Z" />
+            <path class="check" d="m9 12 2 2 4-4" stroke="#6fbdb0" />
+          </svg>
+        </div>
+        <div class="process-title" id="processTitle">Procesando…</div>
+        <div class="process-bar-track"><div class="process-bar-fill" id="processBarFill"></div></div>
+        <div class="process-status" id="processStatus">Iniciando…</div>
+      </div>
+    </div>
+
     <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.13.0/gsap.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.13.0/ScrambleTextPlugin.min.js"></script>
     <script src="js/dashboard.js"></script>
   </body>
 </html>

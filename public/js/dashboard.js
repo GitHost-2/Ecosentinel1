@@ -12,6 +12,75 @@
 
   const REDUCED = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
+  if (window.ScrambleTextPlugin) gsap.registerPlugin(ScrambleTextPlugin);
+
+  function scrambleReveal(el, fullText, opts) {
+    opts = opts || {};
+    if (REDUCED || !window.ScrambleTextPlugin) {
+      el.textContent = fullText;
+      if (opts.onComplete) opts.onComplete();
+      return;
+    }
+    el.textContent = "";
+    gsap.to(el, {
+      duration: opts.duration || 1.3,
+      ease: "power1.inOut",
+      scrambleText: { text: fullText, chars: "upperAndLowerCase", revealDelay: 0.2, tweenLength: true },
+      onComplete: opts.onComplete,
+    });
+  }
+
+  /* ---------- Overlay de proceso (validar / mitigar) ----------
+     Misma animación del loader raíz (index.html): escudo pulsante +
+     barra de progreso. Se reutiliza para simular la validación de
+     recomendaciones (~20s) y la mitigación de amenazas (~30s). */
+  const processOverlay = document.getElementById("processOverlay");
+  const processTitle = document.getElementById("processTitle");
+  const processBarFill = document.getElementById("processBarFill");
+  const processStatus = document.getElementById("processStatus");
+
+  function runProcess(opts) {
+    const duration = opts.duration || 20;
+    const messages = opts.messages && opts.messages.length ? opts.messages : ["Procesando…"];
+    const onComplete = opts.onComplete || function () {};
+
+    if (!processOverlay) {
+      onComplete();
+      return;
+    }
+
+    if (processTitle) processTitle.textContent = opts.title || "Procesando…";
+    if (processStatus) processStatus.textContent = messages[0];
+    if (processBarFill) {
+      gsap.killTweensOf(processBarFill);
+      processBarFill.style.width = "0%";
+    }
+    document.body.style.overflow = "hidden";
+    processOverlay.classList.add("open");
+
+    let msgIndex = 0;
+    const msgEvery = Math.max(1800, (duration * 1000) / (messages.length * 1.4));
+    const msgInterval = setInterval(() => {
+      msgIndex = (msgIndex + 1) % messages.length;
+      if (processStatus) processStatus.textContent = messages[msgIndex];
+    }, msgEvery);
+
+    function finish() {
+      clearInterval(msgInterval);
+      processOverlay.classList.remove("open");
+      document.body.style.overflow = "";
+      onComplete();
+    }
+
+    if (REDUCED) {
+      if (processBarFill) processBarFill.style.width = "100%";
+      setTimeout(finish, Math.min(duration * 1000, 700));
+    } else {
+      if (processBarFill) gsap.to(processBarFill, { width: "100%", duration, ease: "power1.inOut" });
+      setTimeout(finish, duration * 1000);
+    }
+  }
+
   /* ---------- Sesión ---------- */
   function loadSession() {
     try {
@@ -95,6 +164,8 @@
 
   const recoList = document.getElementById("recoList");
   const recoCount = document.getElementById("recoCount");
+  const recoValidateWrap = document.getElementById("recoValidateWrap");
+  const recoValidateBtn = document.getElementById("recoValidateBtn");
   const postureBar = document.getElementById("postureBar");
   const postureValue = document.getElementById("postureValue");
   const POSTURE_R = 52;
@@ -141,6 +212,21 @@
     });
   }
 
+  function updateValidateButton(doneSet) {
+    if (!recoValidateWrap || !recoValidateBtn) return;
+    if (doneSet.size > 0) {
+      if (recoValidateWrap.hidden) {
+        recoValidateWrap.hidden = false;
+        scrambleReveal(recoValidateBtn, "Validar", { duration: 1.3 });
+      }
+    } else {
+      recoValidateWrap.hidden = true;
+      recoValidateBtn.textContent = "Validar";
+      recoValidateBtn.disabled = false;
+      recoValidateBtn.classList.remove("validated");
+    }
+  }
+
   function renderRecommendations() {
     if (!recoList) return;
     const doneSet = loadDoneSet();
@@ -159,13 +245,41 @@
         li.classList.toggle("done");
         saveDoneSet(doneSet);
         updatePosture(doneSet, true);
+        updateValidateButton(doneSet);
       });
       recoList.appendChild(li);
     });
     updatePosture(doneSet, !REDUCED);
+    updateValidateButton(doneSet);
   }
 
   renderRecommendations();
+
+  if (recoValidateBtn) {
+    recoValidateBtn.addEventListener("click", () => {
+      if (recoValidateBtn.disabled) return;
+      recoValidateBtn.disabled = true;
+      runProcess({
+        title: "Validando recomendaciones en tu red",
+        duration: 20,
+        messages: [
+          "Sincronizando con el appliance…",
+          "Verificando reglas de firewall…",
+          "Comprobando configuración de red…",
+          "Confirmando cambios aplicados…",
+        ],
+        onComplete: () => {
+          recoValidateBtn.textContent = "✓ Validado";
+          recoValidateBtn.classList.add("validated");
+          setTimeout(() => {
+            recoValidateBtn.textContent = "Validar";
+            recoValidateBtn.classList.remove("validated");
+            recoValidateBtn.disabled = false;
+          }, 2500);
+        },
+      });
+    });
+  }
 
   /* ---------- Contadores animados ---------- */
   function animateNumber(el, target, duration) {
@@ -271,6 +385,7 @@
     if (elPackets) elPackets.textContent = packets.toLocaleString("es-MX");
     if (elDetected) elDetected.textContent = detected.toLocaleString("es-MX");
     if (elBlocked) elBlocked.textContent = blocked.toLocaleString("es-MX");
+    refreshThreatCounts();
 
     setTimeout(liveTick, 3500 + Math.random() * 4000);
   }
@@ -372,6 +487,74 @@
     if (canvas) drawChart();
   });
 
+  /* ---------- Amenazas: datos compartidos entre la dona y las
+     tarjetas de "Amenazas activas en tu red". Mitigar una amenaza
+     reduce su peso aquí y redistribuye el resto, así ambas vistas
+     se mantienen consistentes. ---------- */
+  const THREATS = [
+    {
+      key: "ransomware",
+      label: "Ransomware",
+      pct: 22,
+      color: "#C4694A",
+      tips: [
+        "Aísla los respaldos fuera de línea para que un cifrado malicioso no los alcance.",
+        "Verifica que los backups se puedan restaurar correctamente al menos una vez al mes.",
+      ],
+    },
+    {
+      key: "bruteforce",
+      label: "Brute Force",
+      pct: 20,
+      color: "#6FBDB0",
+      tips: [
+        "Limita los intentos de inicio de sesión y bloquea la IP tras varios fallos consecutivos.",
+        "Exige contraseñas largas y activa un segundo factor en los accesos remotos.",
+      ],
+    },
+    {
+      key: "portscan",
+      label: "Port Scanning",
+      pct: 18,
+      color: "#D9B44A",
+      tips: [
+        "Cierra en tu firewall perimetral los puertos que no uses activamente.",
+        "Configura alertas ante barridos de puertos repetidos desde una misma IP.",
+      ],
+    },
+    {
+      key: "ddos",
+      label: "DDoS",
+      pct: 16,
+      color: "#4A90C4",
+      tips: [
+        "Activa límites de tasa (rate limiting) en los servicios expuestos a internet.",
+        "Evalúa un proveedor de mitigación DDoS si dependes de disponibilidad 24/7.",
+      ],
+    },
+    {
+      key: "botnet",
+      label: "Botnets Mirai",
+      pct: 14,
+      color: "#8C6FBD",
+      tips: [
+        "Cambia las contraseñas de fábrica de cámaras y demás dispositivos IoT.",
+        "Aísla los dispositivos IoT en una VLAN separada del resto de tu infraestructura.",
+      ],
+    },
+    {
+      key: "spoofing",
+      label: "Spoofing",
+      pct: 10,
+      color: "#8b99a6",
+      tips: [
+        "Habilita protección anti-spoofing (DHCP snooping / ARP inspection) en tus switches.",
+        "Verifica la identidad de dispositivos nuevos antes de otorgarles acceso a la red.",
+      ],
+    },
+  ];
+  const mitigatedThreats = new Set();
+
   /* ---------- Distribución de amenazas (dona animada) ---------- */
   function drawDistribution() {
     const canvas = document.getElementById("distChart");
@@ -384,14 +567,7 @@
     canvas.height = size * dpr;
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
-    const data = [
-      { label: "Ransomware", pct: 22, color: "#C4694A" },
-      { label: "Brute Force", pct: 20, color: "#6FBDB0" },
-      { label: "Port Scanning", pct: 18, color: "#D9B44A" },
-      { label: "DDoS", pct: 16, color: "#4A90C4" },
-      { label: "Botnets Mirai", pct: 14, color: "#8C6FBD" },
-      { label: "Spoofing", pct: 10, color: "#8b99a6" },
-    ];
+    const data = THREATS;
 
     if (legendEl) {
       legendEl.innerHTML = data
@@ -437,6 +613,138 @@
     const canvas = document.getElementById("distChart");
     if (canvas) drawDistribution();
   });
+
+  /* ---------- Amenazas activas en tu red (tarjetas) ----------
+     Cada tarjeta refleja el peso (%) de THREATS sobre el total de
+     ataques detectados. "Tomar acciones" despliega recomendaciones
+     puntuales; "Mitigar" simula la aplicación de esas medidas en la
+     red (pantalla de carga ~30s) y baja los contadores globales de
+     forma creíble, sin llegar nunca a cero. */
+  function tweenStatTo(el, from, to, duration) {
+    if (!el) return;
+    if (REDUCED) {
+      el.textContent = Math.round(to).toLocaleString("es-MX");
+      return;
+    }
+    const obj = { v: from };
+    gsap.to(obj, {
+      v: to,
+      duration: duration || 1.6,
+      ease: "power2.inOut",
+      snap: { v: 1 },
+      onUpdate() {
+        el.textContent = Math.round(obj.v).toLocaleString("es-MX");
+      },
+    });
+  }
+
+  function refreshThreatCounts() {
+    document.querySelectorAll(".threat-mini-card").forEach((card) => {
+      const t = THREATS.find((x) => x.key === card.getAttribute("data-threat"));
+      const countEl = card.querySelector(".tmc-count");
+      if (t && countEl) {
+        countEl.textContent = Math.max(1, Math.round((detected * t.pct) / 100)).toLocaleString("es-MX");
+      }
+    });
+  }
+
+  function mitigateThreat(key) {
+    const threat = THREATS.find((t) => t.key === key);
+    if (!threat) return;
+
+    // Reducción creíble (55%–65%) atribuible a esta mitigación,
+    // nunca a cero ni a un número irrisorio.
+    const reduceFactor = 0.55 + Math.random() * 0.1;
+    const newDetected = Math.max(180, Math.round(detected * (1 - reduceFactor)));
+    const newBlocked = Math.max(150, Math.min(newDetected, Math.round(blocked * (1 - reduceFactor))));
+
+    tweenStatTo(elDetected, detected, newDetected, 1.6);
+    tweenStatTo(elBlocked, blocked, newBlocked, 1.6);
+    detected = newDetected;
+    blocked = newBlocked;
+
+    // Se reduce el peso de esta amenaza en la distribución y se
+    // redistribuye lo liberado entre las demás para seguir sumando 100%.
+    const oldPct = threat.pct;
+    threat.pct = Math.max(2, Math.round(oldPct * 0.25));
+    const freed = oldPct - threat.pct;
+    const others = THREATS.filter((t) => t.key !== key);
+    const othersTotal = others.reduce((s, t) => s + t.pct, 0) || 1;
+    others.forEach((t) => {
+      t.pct = Math.max(2, Math.round(t.pct + freed * (t.pct / othersTotal)));
+    });
+    const sum = THREATS.reduce((s, t) => s + t.pct, 0);
+    threat.pct += 100 - sum;
+
+    mitigatedThreats.add(key);
+    drawDistribution();
+    renderThreatCards();
+  }
+
+  function renderThreatCards() {
+    const grid = document.getElementById("threatsGrid");
+    if (!grid) return;
+
+    grid.innerHTML = THREATS.map((t) => {
+      const count = Math.max(1, Math.round((detected * t.pct) / 100));
+      const isMitigated = mitigatedThreats.has(t.key);
+      return `
+        <div class="threat-mini-card${isMitigated ? " mitigated" : ""}" data-threat="${t.key}">
+          <div class="tmc-head">
+            <span class="tmc-dot" style="background:${t.color}"></span>
+            <span class="tmc-name">${t.label}</span>
+            <span class="tmc-count">${count.toLocaleString("es-MX")}</span>
+          </div>
+          <ul class="tmc-tips" hidden>${t.tips.map((tip) => `<li>${tip}</li>`).join("")}</ul>
+          <div class="tmc-actions">
+            <button class="btn btn-outline-dark tmc-action" data-action="review">Tomar acciones</button>
+            <button class="btn btn-teal tmc-action" data-action="mitigate"${isMitigated ? " disabled" : ""}>${
+        isMitigated ? "Mitigado ✓" : "Mitigar"
+      }</button>
+          </div>
+        </div>`;
+    }).join("");
+
+    grid.querySelectorAll(".threat-mini-card").forEach((card) => {
+      const key = card.getAttribute("data-threat");
+      const tips = card.querySelector(".tmc-tips");
+      const reviewBtn = card.querySelector('[data-action="review"]');
+      const mitigateBtn = card.querySelector('[data-action="mitigate"]');
+      let expanded = false;
+
+      reviewBtn.addEventListener("click", () => {
+        expanded = !expanded;
+        if (expanded) {
+          tips.hidden = false;
+          if (!REDUCED) gsap.from(tips, { height: 0, opacity: 0, duration: 0.35, ease: "power2.out" });
+          reviewBtn.textContent = "Ocultar";
+        } else {
+          tips.hidden = true;
+          reviewBtn.textContent = "Tomar acciones";
+        }
+      });
+
+      mitigateBtn.addEventListener("click", () => {
+        if (mitigateBtn.disabled) return;
+        mitigateBtn.disabled = true;
+        reviewBtn.disabled = true;
+        const threatLabel = THREATS.find((t) => t.key === key).label;
+        runProcess({
+          title: `Mitigando amenaza: ${threatLabel}`,
+          duration: 30,
+          messages: [
+            "Aplicando reglas de contención…",
+            "Aislando el tráfico malicioso…",
+            "Actualizando el motor de inferencia…",
+            "Verificando la reducción de incidentes…",
+          ],
+          onComplete: () => mitigateThreat(key),
+        });
+      });
+    });
+  }
+
+  renderThreatCards();
 
   /* ---------- Punto de integración con el appliance real ----------
      Cuando el motor de inferencia exponga un WebSocket, sustituir la
