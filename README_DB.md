@@ -16,14 +16,22 @@ desde el navegador) fue necesario migrarlo a **Next.js (App Router)**:
   siguen viviendo sin cambios de comportamiento en `public/css` y
   `public/js`, excepto `dashboard.js`, que ahora pide sus datos a la API
   en vez de generarlos con `Math.random()`).
-- Se agregó `db/schema.ts` (esquema de Drizzle ORM) con 3 tablas:
+- Se agregó `db/schema.ts` (esquema de Drizzle ORM) con 4 tablas:
   `devices`, `detections` (se le sumó una columna `attack_type` que no
   estaba en el pedido original, porque la UI necesita la familia de
   ataque — Ransomware/DDoS/etc — y `protocol` por sí solo no alcanza para
-  reconstruirla) y `device_heartbeats`.
-- Se agregaron 4 endpoints (`app/api/stats`, `/api/alerts`, `/api/hourly`,
-  `/api/threats`) que reemplazan, uno por uno, cada bloque de mock data
-  que antes vivía en `public/js/dashboard.js`.
+  reconstruirla), `device_heartbeats` y `users` (cuentas del landing:
+  empresa, correo, contraseña hasheada, plan, perfil del cuestionario).
+- Se agregaron 4 endpoints de datos (`app/api/stats`, `/api/alerts`,
+  `/api/hourly`, `/api/threats`) que reemplazan, uno por uno, cada bloque
+  de mock data que antes vivía en `public/js/dashboard.js`.
+- Se agregaron 3 endpoints de auth (`app/api/auth/register`,
+  `/api/auth/login`, `/api/auth/profile`) y se conectó `public/js/auth.js`
+  a ellos: el registro/login ya no es una simulación pura de front-end,
+  las cuentas se guardan en la tabla `users` con la contraseña hasheada
+  (bcrypt). La sesión en `sessionStorage` del navegador sigue existiendo,
+  pero ahora es solo una copia local de conveniencia para que
+  `dashboard.js` sepa quién entró — el dato real vive en Postgres.
 - El feed de "alertas en vivo" que aparece después de la carga inicial
   sigue siendo una simulación visual client-side (todavía no hay eventos
   reales de la Raspberry Pi) — no escribe en la base de datos. Cuando la
@@ -71,11 +79,29 @@ Tienes dos caminos, elige uno:
 
 ## Paso 3 — Crear las tablas
 
-Ya viene generada la migración inicial en `drizzle/0000_smooth_menace.sql`
-a partir de `db/schema.ts`. Para aplicarla a tu base de Neon:
+Ya vienen generadas las migraciones a partir de `db/schema.ts`:
+`drizzle/0000_smooth_menace.sql` (devices/detections/device_heartbeats) y
+`drizzle/0001_grey_kingpin.sql` (users). Para aplicarlas a tu base de Neon:
 
 ```bash
 npm run db:migrate
+```
+
+Si ya habías creado las tablas a mano pegando el SQL en el editor de Neon
+(sin pasar por `db:migrate`), solo te falta la tabla nueva `users`. Pega
+esto en el **SQL Editor de Neon**:
+
+```sql
+CREATE TABLE IF NOT EXISTS "users" (
+	"id" serial PRIMARY KEY NOT NULL,
+	"company" text NOT NULL,
+	"email" text NOT NULL,
+	"password_hash" text NOT NULL,
+	"plan" text DEFAULT 'Pro' NOT NULL,
+	"profile" text DEFAULT 'intermedio' NOT NULL,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	CONSTRAINT "users_email_unique" UNIQUE("email")
+);
 ```
 
 Si en el futuro modificas `db/schema.ts`, genera una migración nueva y
@@ -111,6 +137,38 @@ npm run dev
 Abre `http://localhost:3000` (landing) y `http://localhost:3000/dashboard`
 (inicia sesión o entra directo a `/dashboard`, la sesión sigue siendo
 simulada vía `sessionStorage` como antes).
+
+## Cómo consultar los usuarios registrados
+
+Desde el **SQL Editor de Neon** (o cualquier cliente Postgres conectado con
+tu `DATABASE_URL`):
+
+```sql
+-- Todos los usuarios (sin exponer el hash de la contraseña)
+SELECT id, company, email, plan, profile, created_at
+FROM users
+ORDER BY created_at DESC;
+
+-- Cuántos usuarios hay por plan
+SELECT plan, count(*) FROM users GROUP BY plan;
+
+-- Cuántos usuarios hay por perfil de conocimiento
+SELECT profile, count(*) FROM users GROUP BY profile;
+```
+
+Nunca hace falta (ni conviene) hacer `SELECT password_hash` salvo para
+depurar el propio backend — es un hash bcrypt, no la contraseña en texto
+plano, así que no es legible de todas formas.
+
+Si prefieres verlo desde código en vez de SQL, con Drizzle sería:
+```ts
+import { db } from "@/db";
+import { users } from "@/db/schema";
+
+const allUsers = await db
+  .select({ id: users.id, company: users.company, email: users.email, plan: users.plan, profile: users.profile })
+  .from(users);
+```
 
 ## Notas y decisiones a revisar
 

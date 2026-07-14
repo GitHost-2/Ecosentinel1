@@ -1,5 +1,20 @@
 import { pgTable, serial, text, timestamp, integer, real } from "drizzle-orm/pg-core";
 
+// Cuentas creadas desde el formulario de registro del landing (empresa,
+// correo, plan, contraseña) + el perfil de conocimiento del cuestionario
+// (principiante/intermedio/avanzado). Separada de `devices`: esta tabla es
+// la identidad de la persona que entra al dashboard; `devices` es la
+// identidad del appliance físico (RPi) que va a mandar detecciones.
+export const users = pgTable("users", {
+  id: serial("id").primaryKey(),
+  company: text("company").notNull(),
+  email: text("email").notNull().unique(),
+  passwordHash: text("password_hash").notNull(),
+  plan: text("plan").notNull().default("Pro"),
+  profile: text("profile").notNull().default("intermedio"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
 export const devices = pgTable("devices", {
   id: serial("id").primaryKey(),
   nombreCliente: text("nombre_cliente").notNull(),

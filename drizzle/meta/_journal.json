@@ -8,6 +8,13 @@
       "when": 1783965219357,
       "tag": "0000_smooth_menace",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1784044970922,
+      "tag": "0001_grey_kingpin",
+      "breakpoints": true
     }
   ]
 }

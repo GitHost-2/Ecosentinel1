@@ -1,9 +1,9 @@
 /* ============================================================
    EcoSentinel — auth.js
-   Modales de login / registro, validación y simulación de auth.
-   Nota: la autenticación es una SIMULACIÓN de front-end. Cuando se
-   conecte al appliance real, este flujo se sustituirá por peticiones
-   al backend del motor de inferencia.
+   Modales de login / registro. Las cuentas viven en Postgres (tabla
+   `users`, ver /api/auth/register, /api/auth/login, /api/auth/profile).
+   La sesión del navegador (sessionStorage) sigue siendo solo una copia
+   local de conveniencia para que dashboard.js sepa quién entró.
    ============================================================ */
 
 (function () {
@@ -148,32 +148,28 @@
     }
   }
 
-  /* ---------- Perfil de conocimiento (cuestionario) ----------
-     Se guarda por correo en localStorage para que, en esta demo,
-     una misma cuenta conserve su perfil entre sesiones. */
-  function profileKey(email) {
-    return "ecosentinel_profile_" + email.trim().toLowerCase();
-  }
-  function saveProfile(email, profile) {
-    try {
-      localStorage.setItem(profileKey(email), profile);
-    } catch (err) {
-      /* almacenamiento no disponible */
-    }
-  }
-  function loadProfile(email) {
-    try {
-      return localStorage.getItem(profileKey(email));
-    } catch (err) {
-      return null;
-    }
+  /* ---------- Registro/login contra la API (Postgres) ---------- */
+  function setFormBusy(form, busy) {
+    const btn = form.querySelector('button[type="submit"]');
+    if (btn) btn.disabled = busy;
   }
 
-  function finishRegistration(profile) {
+  async function finishRegistration(profile) {
     if (!pendingRegistration) return;
+    const { email } = pendingRegistration;
+    try {
+      const res = await fetch("/api/auth/profile", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, profile }),
+      });
+      if (!res.ok) throw new Error("profile update failed");
+    } catch (err) {
+      // El registro ya existe en la BD; si esto falla, el perfil se
+      // queda en su default ("intermedio") y no bloquea el acceso.
+    }
     const data = { ...pendingRegistration, profile };
     pendingRegistration = null;
-    saveProfile(data.email, profile);
     saveSession(data);
     redirectToDashboard();
   }
@@ -181,7 +177,7 @@
   /* ---------- Login ---------- */
   const loginForm = document.getElementById("loginForm");
   if (loginForm) {
-    loginForm.addEventListener("submit", (e) => {
+    loginForm.addEventListener("submit", async (e) => {
       e.preventDefault();
       clearErrors(loginForm);
       const email = loginForm.email.value.trim();
@@ -201,17 +197,34 @@
         return;
       }
 
-      const company = email.split("@")[0].replace(/[._-]+/g, " ");
-      const profile = loadProfile(email) || "intermedio";
-      saveSession({ company: company || "Mi Empresa", email, plan: "Pro", profile });
-      redirectToDashboard();
+      setFormBusy(loginForm, true);
+      try {
+        const res = await fetch("/api/auth/login", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email, password: pass }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          setError(loginForm, "password", data.error || "Correo o contraseña incorrectos.");
+          shake(modals.login);
+          return;
+        }
+        saveSession({ company: data.company, email: data.email, plan: data.plan, profile: data.profile });
+        redirectToDashboard();
+      } catch (err) {
+        setError(loginForm, "password", "No se pudo conectar con el servidor. Intenta de nuevo.");
+        shake(modals.login);
+      } finally {
+        setFormBusy(loginForm, false);
+      }
     });
   }
 
   /* ---------- Registro ---------- */
   const registerForm = document.getElementById("registerForm");
   if (registerForm) {
-    registerForm.addEventListener("submit", (e) => {
+    registerForm.addEventListener("submit", async (e) => {
       e.preventDefault();
       clearErrors(registerForm);
       const company = registerForm.company.value.trim();
@@ -242,9 +255,28 @@
         return;
       }
 
-      pendingRegistration = { company, email, plan };
-      closeModal("register");
-      setTimeout(() => openModal("quiz"), REDUCED ? 0 : 220);
+      setFormBusy(registerForm, true);
+      try {
+        const res = await fetch("/api/auth/register", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ company, email, plan, password: pass }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          setError(registerForm, "email", data.error || "No se pudo completar el registro.");
+          shake(modals.register);
+          return;
+        }
+        pendingRegistration = { company, email, plan };
+        closeModal("register");
+        setTimeout(() => openModal("quiz"), REDUCED ? 0 : 220);
+      } catch (err) {
+        setError(registerForm, "email", "No se pudo conectar con el servidor. Intenta de nuevo.");
+        shake(modals.register);
+      } finally {
+        setFormBusy(registerForm, false);
+      }
     });
   }
 
