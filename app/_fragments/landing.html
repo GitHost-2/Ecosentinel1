@@ -1,0 +1,557 @@
+    <nav class="navbar" id="navbar">
+      <div class="container nav-inner">
+        <a href="#hero" class="brand" aria-label="EcoSentinel inicio">
+          <span class="brand-mark" aria-hidden="true">
+            <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M12 2 4 5v6c0 5 3.5 8.5 8 11 4.5-2.5 8-6 8-11V5l-8-3Z" />
+              <path d="m9 12 2 2 4-4" />
+            </svg>
+          </span>
+          ECOSENTINEL
+        </a>
+
+        <ul class="nav-links" id="navLinks">
+          <li><a href="#hero">Inicio</a></li>
+          <li><a href="#amenazas">Amenazas</a></li>
+          <li><a href="#como-funciona">Cómo funciona</a></li>
+          <li><a href="#porque-nosotros">¿Por qué nosotros?</a></li>
+          <li><a href="#precios">Precios</a></li>
+        </ul>
+
+        <div class="nav-actions">
+          <button class="btn btn-outline" data-open="login" aria-label="Iniciar sesión">Iniciar sesión</button>
+          <button class="btn btn-teal" data-open="register" aria-label="Registrarse">Registrarse</button>
+          <button class="nav-toggle" id="navToggle" aria-label="Abrir menú" aria-expanded="false">
+            <span></span><span></span><span></span>
+          </button>
+        </div>
+      </div>
+    </nav>
+
+    <!-- ============================================================
+         HERO
+    ============================================================= -->
+    <header class="hero" id="hero">
+      <canvas id="hero-canvas" aria-hidden="true"></canvas>
+      <div class="hero-overlay" aria-hidden="true"></div>
+
+      <div class="container hero-inner">
+        <span class="hero-badge"><span class="dot"></span> Edge AI · Detección en tiempo real</span>
+        <h1 id="heroTitle" data-full-text="Seguridad inteligente a la velocidad de tu red" data-accent="Inteligencia Artificial">Seguridad inteligente a la velocidad de tu red</h1>
+        <p class="hero-sub">
+          Detección de intrusiones en tiempo real, directamente en tu red. Sin nube. Sin latencia. Sin compromisos.
+        </p>
+        <div class="hero-cta">
+          <a href="#precios" class="btn btn-teal btn-lg" data-scroll>Protege tu red ahora</a>
+          <a href="#como-funciona" class="btn btn-outline btn-lg" data-scroll>Ver cómo funciona</a>
+        </div>
+
+        <div class="hero-metrics">
+          <div class="metric">
+            <span class="metric-value" data-count="99.79" data-suffix="%" data-decimals="2">0%</span>
+            <span class="metric-label">Detección</span>
+          </div>
+          <div class="metric">
+            <span class="metric-value" data-count="0.003" data-prefix="&lt;" data-suffix="ms" data-decimals="3">0ms</span>
+            <span class="metric-label">Latencia</span>
+          </div>
+          <div class="metric">
+            <span class="metric-value" data-count="30" data-suffix="" data-decimals="0">0</span>
+            <span class="metric-label">Features analizadas</span>
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <!-- ============================================================
+         AMENAZAS — titular en crawl horizontal (pin + SplitText)
+         Fondo: rojo/oscuro difuminado con red neuronal y calaveras.
+    ============================================================= -->
+    <section class="Horizontal amenazas-heading-panel" id="amenazas">
+      <canvas class="ah-canvas" id="amenazasCanvas" aria-hidden="true"></canvas>
+      <div class="ah-glow" aria-hidden="true"></div>
+      <h3 class="Horizontal__text heading-xl ah-heading" id="amenazasHeading">Seis vectores de ataque, un solo guardián</h3>
+    </section>
+
+    <!-- ============================================================
+         AMENAZAS — carrusel de tarjetas
+    ============================================================= -->
+    <section class="amenazas-cards-panel" id="amenazas-cards">
+      <div class="ac-head">
+        <span class="eyebrow">Amenazas que detectamos</span>
+        <p>Nuestro motor de detección analiza el tráfico de tu red y neutraliza los ataques más comunes contra las PyMEs antes de que causen daño.</p>
+      </div>
+
+      <div class="gallery">
+        <ul class="cards">
+          <!-- a) Ransomware -->
+          <li class="threat-card">
+            <div class="threat-visual" data-anim="ransomware">
+              <svg viewBox="0 0 200 150" aria-hidden="true">
+                <g id="rw-file" stroke="#6FBDB0" stroke-width="2" fill="none">
+                  <path d="M70 40 h44 l16 16 v56 h-60 Z" />
+                  <path d="M114 40 v16 h16" />
+                </g>
+                <g id="rw-lines" stroke="#6FBDB0" stroke-width="2">
+                  <line x1="80" y1="66" x2="120" y2="66" />
+                  <line x1="80" y1="78" x2="120" y2="78" />
+                  <line x1="80" y1="90" x2="108" y2="90" />
+                </g>
+                <g id="rw-lock" opacity="0" transform="translate(88,74)">
+                  <rect x="0" y="10" width="24" height="18" rx="3" fill="#C4694A" />
+                  <path d="M4 10 v-4 a8 8 0 0 1 16 0 v4" fill="none" stroke="#C4694A" stroke-width="2.5" />
+                </g>
+              </svg>
+            </div>
+            <span class="threat-tag">Cifrado malicioso</span>
+            <h3>Ransomware</h3>
+            <p>Identificamos patrones de cifrado no autorizado en la red local y frenamos el secuestro de tus archivos.</p>
+          </li>
+
+          <!-- b) DDoS -->
+          <li class="threat-card">
+            <div class="threat-visual" data-anim="ddos">
+              <svg viewBox="0 0 200 150" aria-hidden="true">
+                <circle id="ddos-server" cx="100" cy="75" r="22" fill="none" stroke="#6FBDB0" stroke-width="2.5" />
+                <g id="ddos-packets" fill="#C4694A">
+                  <circle class="pk" cx="20" cy="30" r="4" />
+                  <circle class="pk" cx="20" cy="75" r="4" />
+                  <circle class="pk" cx="20" cy="120" r="4" />
+                  <circle class="pk" cx="180" cy="40" r="4" />
+                  <circle class="pk" cx="180" cy="110" r="4" />
+                </g>
+                <circle id="ddos-shield" cx="100" cy="75" r="34" fill="none" stroke="#2F8F86" stroke-width="2.5" opacity="0" />
+              </svg>
+            </div>
+            <span class="threat-tag">Inundación de tráfico</span>
+            <h3>DDoS</h3>
+            <p>Detectamos y contenemos inundaciones de peticiones diseñadas para tumbar tus servicios y dejarte offline.</p>
+          </li>
+
+          <!-- c) Port Scanning -->
+          <li class="threat-card">
+            <div class="threat-visual" data-anim="portscan">
+              <svg viewBox="0 0 200 150" aria-hidden="true">
+                <g font-family="monospace" font-size="11" fill="#8b99a6" text-anchor="middle">
+                  <g class="port" data-i="0">
+                    <rect x="24" y="60" width="34" height="30" rx="4" fill="none" stroke="#6FBDB0" stroke-width="1.5" />
+                    <text x="41" y="79">22</text>
+                  </g>
+                  <g class="port" data-i="1">
+                    <rect x="66" y="60" width="34" height="30" rx="4" fill="none" stroke="#6FBDB0" stroke-width="1.5" />
+                    <text x="83" y="79">80</text>
+                  </g>
+                  <g class="port" data-i="2">
+                    <rect x="108" y="60" width="34" height="30" rx="4" fill="none" stroke="#6FBDB0" stroke-width="1.5" />
+                    <text x="125" y="79">443</text>
+                  </g>
+                  <g class="port" data-i="3">
+                    <rect x="150" y="60" width="34" height="30" rx="4" fill="none" stroke="#6FBDB0" stroke-width="1.5" />
+                    <text x="167" y="79">3306</text>
+                  </g>
+                </g>
+                <line id="ps-scanner" x1="24" y1="50" x2="24" y2="100" stroke="#C4694A" stroke-width="2" />
+              </svg>
+            </div>
+            <span class="threat-tag">Reconocimiento</span>
+            <h3>Port Scanning</h3>
+            <p>Reconocemos los barridos de puertos que usan los atacantes para mapear tu red y bloqueamos al intruso.</p>
+          </li>
+
+          <!-- d) Mirai / Botnets -->
+          <li class="threat-card">
+            <div class="threat-visual" data-anim="botnet">
+              <svg viewBox="0 0 200 150" aria-hidden="true">
+                <g id="bn-links" stroke="#C4694A" stroke-width="1.5" opacity="0">
+                  <line x1="40" y1="40" x2="100" y2="120" />
+                  <line x1="100" y1="35" x2="100" y2="120" />
+                  <line x1="160" y1="40" x2="100" y2="120" />
+                </g>
+                <g class="bn-device" transform="translate(30,30)">
+                  <rect width="20" height="20" rx="4" fill="none" stroke="#6FBDB0" stroke-width="2" />
+                </g>
+                <g class="bn-device" transform="translate(90,25)">
+                  <rect width="20" height="20" rx="4" fill="none" stroke="#6FBDB0" stroke-width="2" />
+                </g>
+                <g class="bn-device" transform="translate(150,30)">
+                  <rect width="20" height="20" rx="4" fill="none" stroke="#6FBDB0" stroke-width="2" />
+                </g>
+                <path id="bn-cnc" d="M92 118 h16 v14 h-16 Z" fill="none" stroke="#C4694A" stroke-width="2" />
+              </svg>
+            </div>
+            <span class="threat-tag">Dispositivos IoT</span>
+            <h3>Botnets Mirai</h3>
+            <p>Aislamos los dispositivos IoT comprometidos antes de que sean reclutados y controlados de forma remota.</p>
+          </li>
+
+          <!-- e) Brute Force -->
+          <li class="threat-card">
+            <div class="threat-visual" data-anim="brute">
+              <svg viewBox="0 0 200 150" aria-hidden="true">
+                <rect x="40" y="55" width="120" height="34" rx="6" fill="none" stroke="#6FBDB0" stroke-width="2" />
+                <text id="bf-text" x="52" y="77" font-family="monospace" font-size="14" fill="#C4694A">••••••</text>
+                <text id="bf-count" x="100" y="112" font-family="monospace" font-size="12" fill="#8b99a6" text-anchor="middle">Intentos: 0</text>
+                <g id="bf-lock" opacity="0" transform="translate(150,58)">
+                  <rect x="0" y="8" width="20" height="16" rx="3" fill="#2F8F86" />
+                  <path d="M3 8 v-3 a7 7 0 0 1 14 0 v3" fill="none" stroke="#2F8F86" stroke-width="2.5" />
+                </g>
+              </svg>
+            </div>
+            <span class="threat-tag">Acceso por fuerza</span>
+            <h3>Brute Force</h3>
+            <p>Detenemos las oleadas de intentos de acceso automatizados que buscan adivinar tus credenciales.</p>
+          </li>
+
+          <!-- f) Spoofing -->
+          <li class="threat-card">
+            <div class="threat-visual" data-anim="spoofing">
+              <svg viewBox="0 0 200 150" aria-hidden="true">
+                <g id="sp-legit" transform="translate(35,50)">
+                  <circle cx="20" cy="20" r="20" fill="none" stroke="#6FBDB0" stroke-width="2.5" />
+                  <text x="20" y="24" font-family="monospace" font-size="9" fill="#6FBDB0" text-anchor="middle">.10</text>
+                </g>
+                <g id="sp-fake" transform="translate(125,50)">
+                  <circle cx="20" cy="20" r="20" fill="none" stroke="#C4694A" stroke-width="2.5" />
+                  <text x="20" y="24" font-family="monospace" font-size="9" fill="#C4694A" text-anchor="middle">.10</text>
+                </g>
+                <path id="sp-arrow" d="M120 70 L95 70" stroke="#C4694A" stroke-width="2" marker-end="url(#arrow)" />
+                <g id="sp-flag" opacity="0" transform="translate(140,38)">
+                  <path d="M0 0 v22 M0 0 h12 l-3 5 3 5 h-12" fill="#C4694A" stroke="#C4694A" stroke-width="1.5" />
+                </g>
+                <defs>
+                  <marker id="arrow" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+                    <path d="M0 0 L6 3 L0 6 Z" fill="#C4694A" />
+                  </marker>
+                </defs>
+              </svg>
+            </div>
+            <span class="threat-tag">Suplantación</span>
+            <h3>Spoofing</h3>
+            <p>Distinguimos al dispositivo legítimo del impostor que suplanta su identidad para infiltrarse en tu red.</p>
+          </li>
+        </ul>
+      </div>
+
+      <div class="gallery-actions">
+        <button class="btn btn-outline" id="cardsPrev" aria-label="Amenaza anterior">← Anterior</button>
+        <button class="btn btn-outline" id="cardsNext" aria-label="Siguiente amenaza">Siguiente →</button>
+      </div>
+      <p class="gallery-hint">Presiona "Siguiente" o toca una tarjeta para explorar las 6 amenazas</p>
+    </section>
+
+    <!-- ============================================================
+         CÓMO FUNCIONA
+    ============================================================= -->
+    <section class="section-dark" id="como-funciona">
+      <div class="container">
+        <div class="section-head">
+          <span class="eyebrow">Cómo funciona</span>
+          <h2 data-scramble>De paquete a decisión en menos de 0.003 ms</h2>
+          <p>Cada paquete que entra a tu red recorre un pipeline de análisis inteligente antes de ser aprobado o bloqueado.</p>
+        </div>
+
+        <div class="pipeline">
+          <div class="pipeline-line"><span class="fill"></span><span class="flow-dot"></span></div>
+          <div class="pipeline-track">
+            <div class="pnode" data-step="0">
+              <div class="pdot">
+                <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12h16M4 6h16M4 18h16"/></svg>
+              </div>
+              <div class="ptitle">Tráfico de red</div>
+              <div class="pdesc">Todo el tráfico que circula por tu red entra al analizador.</div>
+            </div>
+            <div class="pnode" data-step="1">
+              <div class="pdot">
+                <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m22 2-7 20-4-9-9-4Z"/><path d="M22 2 11 13"/></svg>
+              </div>
+              <div class="ptitle">Captura</div>
+              <div class="pdesc">Interceptamos los paquetes a bajo nivel sin ralentizar tu conexión.</div>
+            </div>
+            <div class="pnode" data-step="2">
+              <div class="pdot">
+                <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="m7 14 4-4 3 3 5-6"/></svg>
+              </div>
+              <div class="ptitle">Extracción de features</div>
+              <div class="pdesc">Calculamos 30 características del flujo de red en tiempo real.</div>
+            </div>
+            <div class="pnode" data-step="3">
+              <div class="pdot">
+                <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M5 5l2 2M17 17l2 2M17 7l2-2M5 19l2-2"/></svg>
+              </div>
+              <div class="ptitle">Random Forest</div>
+              <div class="pdesc">Un modelo de IA clasifica el flujo entre benigno y malicioso.</div>
+            </div>
+            <div class="pnode" data-step="4">
+              <div class="pdot">
+                <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2 4 5v6c0 5 3.5 8.5 8 11 4.5-2.5 8-6 8-11V5l-8-3Z"/><path d="m9 12 2 2 4-4"/></svg>
+              </div>
+              <div class="ptitle">Decisión · umbral 0.10</div>
+              <div class="pdesc">Un umbral calibrado y sensible decide: alerta y bloqueo o paso libre.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============================================================
+         ¿POR QUÉ NOSOTROS? — la amenaza en cifras reales (2026)
+    ============================================================= -->
+    <section class="section-light" id="porque-nosotros">
+      <div class="container">
+        <div class="section-head">
+          <span class="eyebrow">¿Por qué nosotros?</span>
+          <h2 data-scramble>La amenaza crece cada año. Tu defensa debe crecer con ella</h2>
+          <p>Los ciberataques contra empresas —y en especial contra PyMEs— no han dejado de aumentar. Esto es lo que dicen los datos de 2026.</p>
+        </div>
+
+        <div class="why-grid">
+          <div class="why-stat">
+            <div class="why-value" data-count="8" data-suffix="/10" data-decimals="0">0</div>
+            <div class="why-label">empresas mexicanas ha sufrido al menos un ciberataque</div>
+          </div>
+          <div class="why-stat">
+            <div class="why-value" data-count="48" data-suffix="%" data-decimals="0" data-prefix="+">0</div>
+            <div class="why-label">incremento interanual en ataques de ransomware a nivel global (mayo 2026)</div>
+          </div>
+          <div class="why-stat">
+            <div class="why-value" data-count="1.35" data-suffix="M USD" data-decimals="2" data-prefix="$">0</div>
+            <div class="why-label">costo promedio de recuperación de un ataque de ransomware en México</div>
+          </div>
+          <div class="why-stat">
+            <div class="why-value" data-count="74000" data-suffix="M USD" data-decimals="0" data-prefix="$">0</div>
+            <div class="why-label">en daños globales por ransomware proyectados para 2026</div>
+          </div>
+        </div>
+
+        <div class="why-compare">
+          <div class="growth-figure">
+            <div class="big" data-growth="70">0%</div>
+            <div class="lbl">más ataques semanales a nivel global desde 2023</div>
+          </div>
+          <div class="compare">
+            <h4>Ataques cibernéticos semanales promedio (global)</h4>
+            <div class="bar-row">
+              <span class="bar-name">2023</span>
+              <div class="bar-outer"><div class="bar-inner before" data-width="59" data-value="~1,157 / sem."></div></div>
+            </div>
+            <div class="bar-row">
+              <span class="bar-name">2026</span>
+              <div class="bar-outer"><div class="bar-inner after" data-width="100" data-value="~1,968 / sem."></div></div>
+            </div>
+          </div>
+        </div>
+        <p class="why-source">
+          Fuentes: Check Point Research (may. 2026), SentinelOne, Fortinet / Reuters, MexicoBusiness News, Tantius, GNP (2025–2026). Cifras aproximadas con fines ilustrativos.
+        </p>
+      </div>
+    </section>
+
+    <!-- ============================================================
+         PRECIOS
+    ============================================================= -->
+    <section class="section-navy2" id="precios">
+      <div class="container">
+        <div class="section-head">
+          <span class="eyebrow">Planes</span>
+          <h2 data-scramble>Protección a la medida de tu empresa</h2>
+          <p>Elige un plan; al crear tu cuenta te haremos un par de preguntas rápidas para adaptar tu panel a tu nivel de conocimiento.</p>
+        </div>
+        <p class="pricing-hardware">
+          Hardware EcoSentinel: <strong>$1,500 MXN</strong> — pago único. Elige después tu plan de inteligencia.
+        </p>
+
+        <div class="pricing-grid">
+          <!-- Basic -->
+          <div class="price-card">
+            <div class="plan-name">Basic</div>
+            <div class="plan-desc">Protección esencial con reglas estáticas.</div>
+            <div class="plan-price">$0<span> / mes</span></div>
+            <ul class="plan-features">
+              <li><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m20 6-11 11-5-5"/></svg> Detección con reglas estáticas</li>
+              <li><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m20 6-11 11-5-5"/></svg> Panel de monitoreo local</li>
+              <li><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m20 6-11 11-5-5"/></svg> Actualizaciones manuales</li>
+              <li><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m20 6-11 11-5-5"/></svg> Alertas en el dashboard</li>
+            </ul>
+            <button class="btn btn-outline btn-block" data-open="register">Empezar gratis</button>
+          </div>
+
+          <!-- Pro (destacado) -->
+          <div class="price-card featured">
+            <span class="price-badge">Más popular</span>
+            <div class="plan-name">Pro</div>
+            <div class="plan-desc">IA actualizada y soporte para crecer tranquilo.</div>
+            <div class="plan-price">$250<span> / mes</span></div>
+            <ul class="plan-features">
+              <li><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m20 6-11 11-5-5"/></svg> Todo lo de Basic</li>
+              <li><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m20 6-11 11-5-5"/></svg> Actualizaciones mensuales del modelo IA</li>
+              <li><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m20 6-11 11-5-5"/></svg> Detección de las 6 familias de ataque</li>
+              <li><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m20 6-11 11-5-5"/></svg> Soporte técnico prioritario</li>
+            </ul>
+            <button class="btn btn-teal btn-block" data-open="register">Elegir Pro</button>
+          </div>
+
+          <!-- Enterprise -->
+          <div class="price-card">
+            <div class="plan-name">Enterprise</div>
+            <div class="plan-desc">Máxima defensa contra amenazas emergentes.</div>
+            <div class="plan-price">$500<span> / mes</span></div>
+            <ul class="plan-features">
+              <li><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m20 6-11 11-5-5"/></svg> Todo lo de Pro</li>
+              <li><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m20 6-11 11-5-5"/></svg> Actualizaciones semanales contra Zero-Day</li>
+              <li><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m20 6-11 11-5-5"/></svg> Alertas en la nube</li>
+              <li><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m20 6-11 11-5-5"/></svg> Soporte 24/7</li>
+            </ul>
+            <button class="btn btn-outline btn-block" data-open="register">Contactar ventas</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============================================================
+         FOOTER
+    ============================================================= -->
+    <footer class="footer">
+      <div class="container">
+        <div class="footer-top">
+          <div class="footer-col">
+            <a href="#hero" class="brand">
+              <span class="brand-mark" aria-hidden="true">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2 4 5v6c0 5 3.5 8.5 8 11 4.5-2.5 8-6 8-11V5l-8-3Z"/><path d="m9 12 2 2 4-4"/></svg>
+              </span>
+              ECOSENTINEL
+            </a>
+            <p class="footer-about">
+              Ciberseguridad perimetral con inteligencia artificial de borde para pequeñas y medianas empresas.
+              Protección en tiempo real, directamente en tu red.
+            </p>
+          </div>
+          <div class="footer-col">
+            <h5>Producto</h5>
+            <ul>
+              <li><a href="#amenazas">Amenazas</a></li>
+              <li><a href="#como-funciona">Cómo funciona</a></li>
+              <li><a href="#porque-nosotros">¿Por qué nosotros?</a></li>
+              <li><a href="#precios">Precios</a></li>
+            </ul>
+          </div>
+          <div class="footer-col">
+            <h5>Cuenta</h5>
+            <ul>
+              <li><a data-open="login">Iniciar sesión</a></li>
+              <li><a data-open="register">Registrarse</a></li>
+              <li><a href="/dashboard">Dashboard</a></li>
+            </ul>
+          </div>
+        </div>
+        <div class="footer-bottom">
+          <span>© 2026 EcoSentinel. Todos los derechos reservados.</span>
+          <span class="footer-disclaimer">Desarrollado con fines académicos y defensivos.</span>
+        </div>
+      </div>
+    </footer>
+
+    <!-- ============================================================
+         MODALES DE AUTENTICACIÓN
+    ============================================================= -->
+    <div class="modal-overlay" id="loginOverlay" role="dialog" aria-modal="true" aria-labelledby="loginTitle">
+      <div class="modal" id="loginModal">
+        <button class="modal-close" data-close aria-label="Cerrar">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
+        </button>
+        <h3 id="loginTitle">Bienvenido de vuelta</h3>
+        <p class="modal-sub">Accede al panel de monitoreo de tu red.</p>
+        <form id="loginForm" novalidate>
+          <div class="field">
+            <label for="loginEmail">Correo electrónico</label>
+            <input type="email" id="loginEmail" name="email" placeholder="tucorreo@empresa.com" autocomplete="email" />
+            <div class="error-msg" data-error="email"></div>
+          </div>
+          <div class="field">
+            <label for="loginPassword">Contraseña</label>
+            <input type="password" id="loginPassword" name="password" placeholder="••••••••" autocomplete="current-password" />
+            <div class="error-msg" data-error="password"></div>
+          </div>
+          <button type="submit" class="btn btn-teal btn-block btn-lg">Entrar</button>
+        </form>
+        <p class="modal-switch">¿No tienes cuenta? <a data-switch="register">Regístrate</a></p>
+      </div>
+    </div>
+
+    <div class="modal-overlay" id="registerOverlay" role="dialog" aria-modal="true" aria-labelledby="registerTitle">
+      <div class="modal" id="registerModal">
+        <button class="modal-close" data-close aria-label="Cerrar">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
+        </button>
+        <h3 id="registerTitle">Crea tu cuenta</h3>
+        <p class="modal-sub">Empieza a proteger tu red en minutos.</p>
+        <form id="registerForm" novalidate>
+          <div class="field">
+            <label for="regCompany">Nombre de la empresa</label>
+            <input type="text" id="regCompany" name="company" placeholder="Mi Empresa S.A. de C.V." autocomplete="organization" />
+            <div class="error-msg" data-error="company"></div>
+          </div>
+          <div class="field">
+            <label for="regEmail">Correo electrónico</label>
+            <input type="email" id="regEmail" name="email" placeholder="tucorreo@empresa.com" autocomplete="email" />
+            <div class="error-msg" data-error="email"></div>
+          </div>
+          <div class="field">
+            <label for="regPlan">Plan</label>
+            <select id="regPlan" name="plan">
+              <option value="Basic">Basic — $0/mes</option>
+              <option value="Pro" selected>Pro — $250/mes</option>
+              <option value="Enterprise">Enterprise — $500/mes</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="regPassword">Contraseña</label>
+            <input type="password" id="regPassword" name="password" placeholder="Mínimo 8 caracteres" autocomplete="new-password" />
+            <div class="error-msg" data-error="password"></div>
+          </div>
+          <div class="field">
+            <label for="regConfirm">Confirmar contraseña</label>
+            <input type="password" id="regConfirm" name="confirm" placeholder="Repite tu contraseña" autocomplete="new-password" />
+            <div class="error-msg" data-error="confirm"></div>
+          </div>
+          <button type="submit" class="btn btn-teal btn-block btn-lg">Crear cuenta</button>
+        </form>
+        <p class="modal-switch">¿Ya tienes cuenta? <a data-switch="login">Inicia sesión</a></p>
+      </div>
+    </div>
+
+    <!-- ============================================================
+         MODAL: cuestionario de perfil (tras registrarse)
+    ============================================================= -->
+    <div class="modal-overlay" id="quizOverlay" role="dialog" aria-modal="true" aria-labelledby="quizTitle">
+      <div class="modal modal-quiz" id="quizModal">
+        <h3 id="quizTitle">Antes de empezar…</h3>
+        <p class="modal-sub">Tres preguntas rápidas para adaptar tu panel a tu nivel de conocimiento.</p>
+        <form id="quizForm" novalidate>
+          <fieldset class="quiz-q" data-question="1">
+            <legend>¿Qué tan familiarizado estás con la tecnología en general?</legend>
+            <div class="quiz-options">
+              <label class="quiz-opt"><input type="radio" name="q1" value="1" required /><span>Poco — uso básico de apps y correo</span></label>
+              <label class="quiz-opt"><input type="radio" name="q1" value="2" /><span>Algo — configuro redes y dispositivos</span></label>
+              <label class="quiz-opt"><input type="radio" name="q1" value="3" /><span>Mucho — trabajo en TI o áreas técnicas</span></label>
+            </div>
+          </fieldset>
+          <fieldset class="quiz-q" data-question="2">
+            <legend>¿Sabes qué es un firewall o un ataque de phishing?</legend>
+            <div class="quiz-options">
+              <label class="quiz-opt"><input type="radio" name="q2" value="1" required /><span>No, no estoy familiarizado</span></label>
+              <label class="quiz-opt"><input type="radio" name="q2" value="2" /><span>Más o menos, he escuchado los términos</span></label>
+              <label class="quiz-opt"><input type="radio" name="q2" value="3" /><span>Sí, los entiendo y los manejo</span></label>
+            </div>
+          </fieldset>
+          <fieldset class="quiz-q" data-question="3">
+            <legend>¿Tu empresa ya usa alguna herramienta de ciberseguridad?</legend>
+            <div class="quiz-options">
+              <label class="quiz-opt"><input type="radio" name="q3" value="1" required /><span>No, ninguna todavía</span></label>
+              <label class="quiz-opt"><input type="radio" name="q3" value="2" /><span>Sí, algo básico (antivirus)</span></label>
+              <label class="quiz-opt"><input type="radio" name="q3" value="3" /><span>Sí, varias herramientas</span></label>
+            </div>
+          </fieldset>
+          <button type="submit" class="btn btn-teal btn-block btn-lg">Ver mi panel</button>
+        </form>
+      </div>
+    </div>

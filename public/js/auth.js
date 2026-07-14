@@ -263,7 +263,7 @@
 
   function redirectToDashboard() {
     if (REDUCED) {
-      window.location.href = "dashboard.html";
+      window.location.href = "/dashboard";
       return;
     }
     // Pequeña transición de salida antes de redirigir
@@ -271,7 +271,7 @@
       opacity: 0,
       duration: 0.3,
       ease: "power1.in",
-      onComplete: () => (window.location.href = "dashboard.html"),
+      onComplete: () => (window.location.href = "/dashboard"),
     });
   }
 })();

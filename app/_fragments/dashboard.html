@@ -1,0 +1,183 @@
+    <!-- HEADER -->
+    <header class="dash-header">
+      <div class="container nav-inner">
+        <a href="/" class="brand" aria-label="EcoSentinel inicio">
+          <span class="brand-mark" aria-hidden="true">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2 4 5v6c0 5 3.5 8.5 8 11 4.5-2.5 8-6 8-11V5l-8-3Z"/><path d="m9 12 2 2 4-4"/></svg>
+          </span>
+          ECOSENTINEL
+        </a>
+        <div class="dash-user">
+          <div class="user-meta">
+            <div class="user-name" id="userName">Mi Empresa</div>
+            <div class="user-plan" id="userPlan">Plan Pro</div>
+          </div>
+          <button class="btn btn-outline-dark" id="logoutBtn">Cerrar sesión</button>
+        </div>
+      </div>
+    </header>
+
+    <main class="dash-main">
+      <div class="container">
+        <div class="dash-title-row">
+          <div class="dash-title-main">
+            <h1>Estado de tu red</h1>
+            <span class="profile-badge" id="profileBadge">Perfil: Intermedio</span>
+          </div>
+          <span class="status-pill online" id="statusPill">
+            <span class="dot"></span> Appliance conectado
+          </span>
+        </div>
+
+        <!-- ESTADÍSTICAS -->
+        <div class="stat-grid">
+          <div class="stat-card">
+            <div class="stat-top">
+              <span class="stat-label">Paquetes analizados</span>
+              <span class="stat-icon navy" aria-hidden="true">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+              </span>
+            </div>
+            <div class="stat-value" id="statPackets">0</div>
+            <div class="stat-trend">30 features por muestra</div>
+          </div>
+
+          <div class="stat-card">
+            <div class="stat-top">
+              <span class="stat-label">Ataques detectados</span>
+              <span class="stat-icon coral" aria-hidden="true">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z"/><path d="M12 9v4M12 17h.01"/></svg>
+              </span>
+            </div>
+            <div class="stat-value" id="statDetected">0</div>
+            <div class="stat-trend">Recall 99.79%</div>
+          </div>
+
+          <div class="stat-card">
+            <div class="stat-top">
+              <span class="stat-label">Ataques bloqueados</span>
+              <span class="stat-icon teal" aria-hidden="true">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2 4 5v6c0 5 3.5 8.5 8 11 4.5-2.5 8-6 8-11V5l-8-3Z"/><path d="m9 12 2 2 4-4"/></svg>
+              </span>
+            </div>
+            <div class="stat-value" id="statBlocked">0</div>
+            <div class="stat-trend">Umbral calibrado en 0.10</div>
+          </div>
+
+          <div class="stat-card">
+            <div class="stat-top">
+              <span class="stat-label">Latencia de inferencia</span>
+              <span class="stat-icon teal" aria-hidden="true">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
+              </span>
+            </div>
+            <div class="stat-value">&lt;0.003<span style="font-size:1rem;color:var(--gray)">ms</span></div>
+            <div class="stat-trend">Procesamiento en el borde</div>
+          </div>
+        </div>
+
+        <!-- POSTURA DE SEGURIDAD + RECOMENDACIONES (según perfil) -->
+        <div class="posture-grid">
+          <div class="panel posture-panel">
+            <div class="panel-head">
+              <h3>Postura de seguridad</h3>
+            </div>
+            <div class="posture-body">
+              <div class="posture-ring">
+                <svg viewBox="0 0 120 120">
+                  <circle class="track" cx="60" cy="60" r="52" />
+                  <circle class="bar" id="postureBar" cx="60" cy="60" r="52" />
+                </svg>
+                <div class="posture-value-wrap">
+                  <div class="posture-value" id="postureValue">0%</div>
+                </div>
+              </div>
+              <p class="posture-hint">Marca las recomendaciones que ya aplicas en tu red para mejorar tu puntaje.</p>
+            </div>
+          </div>
+
+          <div class="panel recommendations-panel">
+            <div class="panel-head">
+              <h3>Recomendaciones para tu red</h3>
+              <span class="live" id="recoCount">0/4 aplicadas</span>
+            </div>
+            <ul class="reco-list" id="recoList"><!-- inyectado por dashboard.js --></ul>
+            <div class="reco-validate-wrap" id="recoValidateWrap" hidden>
+              <button class="btn btn-teal btn-block reco-validate-btn" id="recoValidateBtn">Validar</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- COLUMNAS: alertas + gráfico -->
+        <div class="dash-columns">
+          <!-- Feed de alertas -->
+          <div class="panel">
+            <div class="panel-head">
+              <h3>Alertas recientes</h3>
+              <span class="live"><span class="dot"></span> En vivo</span>
+            </div>
+            <div style="overflow-x:auto">
+              <table class="alerts-table">
+                <thead>
+                  <tr>
+                    <th>Hora</th>
+                    <th>IP origen</th>
+                    <th>Tipo de ataque</th>
+                    <th>Probabilidad</th>
+                    <th>Acción</th>
+                  </tr>
+                </thead>
+                <tbody id="alertsBody"><!-- inyectado por dashboard.js --></tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- Gráfico 24h -->
+          <div class="panel chart-panel">
+            <div class="panel-head" style="padding:0 0 16px 0;border:0">
+              <h3>Ataques (últimas 24 h)</h3>
+            </div>
+            <canvas id="dash-chart" aria-label="Gráfico de ataques en las últimas 24 horas"></canvas>
+            <div class="chart-legend">
+              <span><i style="background:var(--coral)"></i> Detectados</span>
+              <span><i style="background:var(--teal)"></i> Bloqueados</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- DISTRIBUCIÓN DE AMENAZAS -->
+        <div class="panel distribution-panel">
+          <div class="panel-head">
+            <h3>Distribución de amenazas detectadas (30 días)</h3>
+          </div>
+          <div class="distribution-body">
+            <canvas id="distChart" width="220" height="220" aria-label="Distribución de amenazas por tipo"></canvas>
+            <ul class="distribution-legend" id="distLegend"><!-- inyectado por dashboard.js --></ul>
+          </div>
+        </div>
+
+        <!-- AMENAZAS ACTIVAS EN LA RED -->
+        <div class="panel threats-panel">
+          <div class="panel-head">
+            <h3>Amenazas activas en tu red</h3>
+            <span class="live"><span class="dot"></span> Monitoreo continuo</span>
+          </div>
+          <div class="threats-grid" id="threatsGrid"><!-- inyectado por dashboard.js --></div>
+        </div>
+      </div>
+    </main>
+
+    <!-- OVERLAY: validación / mitigación (misma animación del loader de index.html) -->
+    <div class="process-overlay" id="processOverlay" role="alert" aria-live="assertive">
+      <div class="process-loader">
+        <div class="process-shield" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 2 4 5v6c0 5 3.5 8.5 8 11 4.5-2.5 8-6 8-11V5l-8-3Z" />
+            <path class="check" d="m9 12 2 2 4-4" stroke="#6fbdb0" />
+          </svg>
+        </div>
+        <div class="process-title" id="processTitle">Procesando…</div>
+        <div class="process-bar-track"><div class="process-bar-fill" id="processBarFill"></div></div>
+        <div class="process-status" id="processStatus">Iniciando…</div>
+      </div>
+    </div>

@@ -1,10 +1,15 @@
 /* ============================================================
    EcoSentinel — dashboard.js
-   Panel de monitoreo con datos SIMULADOS, adaptado al perfil de
-   conocimiento del usuario (ver cuestionario en auth.js).
-   Cuando se conecte al appliance real, los datos llegarán vía
-   WebSocket desde el motor de inferencia. La función connectLive()
-   deja preparado ese punto de integración.
+   Panel de monitoreo. Los valores iniciales (contadores, alertas,
+   gráfico de 24h y distribución de amenazas) se cargan desde Postgres
+   vía /api/stats, /api/alerts, /api/hourly y /api/threats. El feed
+   "en vivo" que se ve tras la carga inicial sigue siendo una
+   simulación visual client-side (aún no hay eventos reales del
+   appliance) — no se escribe en la base de datos.
+   Cuando se conecte al appliance real, esos ticks simulados se
+   sustituirán por eventos entrantes vía WebSocket desde el motor de
+   inferencia. La función connectLive() deja preparado ese punto de
+   integración.
    ============================================================ */
 
 (function () {
@@ -102,7 +107,7 @@
       try {
         sessionStorage.removeItem("ecosentinel_session");
       } catch (e) {}
-      window.location.href = "index.html";
+      window.location.href = "/";
     });
   }
 
@@ -300,18 +305,15 @@
     });
   }
 
-  // Valores base simulados
-  let packets = 1842563 + Math.floor(Math.random() * 40000);
-  let detected = 3305 + Math.floor(Math.random() * 60);
-  let blocked = detected - Math.floor(Math.random() * 8);
+  // Contadores: valores reales, cargados desde /api/stats (ver init() al
+  // final del archivo). Arrancan en 0 y se animan al llegar la respuesta.
+  let packets = 0;
+  let detected = 0;
+  let blocked = 0;
 
   const elPackets = document.getElementById("statPackets");
   const elDetected = document.getElementById("statDetected");
   const elBlocked = document.getElementById("statBlocked");
-
-  animateNumber(elPackets, packets, 2.2);
-  animateNumber(elDetected, detected, 2);
-  animateNumber(elBlocked, blocked, 2);
 
   /* ---------- Feed de alertas ---------- */
   const ATTACK_TYPES = ["Ransomware", "DDoS", "Port Scanning", "Botnet Mirai", "Brute Force", "Spoofing"];
@@ -366,15 +368,9 @@
     }
   }
 
-  // Semilla inicial de alertas (con horas retrocedidas)
-  (function seed() {
-    const now = Date.now();
-    for (let i = MAX_ROWS - 1; i >= 0; i--) {
-      addAlert(makeAlert(new Date(now - i * 90000)), false);
-    }
-  })();
-
-  // Nuevas alertas periódicas (simulación de tráfico en vivo)
+  // Alertas iniciales: se cargan desde /api/alerts en init().
+  // Nuevas alertas periódicas (simulación visual de tráfico en vivo;
+  // aún no hay eventos reales del appliance, no se escribe en la BD)
   function liveTick() {
     const a = makeAlert(new Date());
     addAlert(a, true);
@@ -389,20 +385,27 @@
 
     setTimeout(liveTick, 3500 + Math.random() * 4000);
   }
-  setTimeout(liveTick, 4000);
 
-  // Incremento continuo de paquetes analizados
-  if (!REDUCED) {
-    setInterval(() => {
-      packets += Math.floor(Math.random() * 90) + 20;
-      if (elPackets) elPackets.textContent = packets.toLocaleString("es-MX");
-    }, 1200);
+  function startLiveSimulation() {
+    setTimeout(liveTick, 4000);
+    // Incremento continuo de paquetes analizados
+    if (!REDUCED) {
+      setInterval(() => {
+        packets += Math.floor(Math.random() * 90) + 20;
+        if (elPackets) elPackets.textContent = packets.toLocaleString("es-MX");
+      }, 1200);
+    }
   }
 
-  /* ---------- Gráfico 24h (canvas nativo) ---------- */
+  /* ---------- Gráfico 24h (canvas nativo) ----------
+     Los datos (det/blk, 24 valores del más antiguo al más reciente) se
+     cargan una vez desde /api/hourly en init() y se guardan en
+     hourlyData para poder redibujar en cada resize sin volver a pedirlos. */
+  let hourlyData = null;
+
   function drawChart() {
     const canvas = document.getElementById("dash-chart");
-    if (!canvas) return;
+    if (!canvas || !hourlyData) return;
     const ctx = canvas.getContext("2d");
     const dpr = Math.min(window.devicePixelRatio || 1, 2);
     const cw = canvas.clientWidth;
@@ -411,16 +414,10 @@
     canvas.height = ch * dpr;
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
-    // Datos simulados por hora
     const hours = 24;
-    const det = [];
-    const blk = [];
-    for (let i = 0; i < hours; i++) {
-      const base = 4 + Math.round(Math.abs(Math.sin(i / 3)) * 10 + Math.random() * 6);
-      det.push(base);
-      blk.push(base - Math.round(Math.random() * 2));
-    }
-    const maxVal = Math.max(...det) + 4;
+    const det = hourlyData.detected;
+    const blk = hourlyData.blocked;
+    const maxVal = Math.max(...det, 1) + 4;
 
     const padL = 30;
     const padB = 24;
@@ -480,7 +477,8 @@
     });
   }
 
-  drawChart();
+  // drawChart() se invoca por primera vez desde init(), una vez que
+  // /api/hourly responde.
   window.addEventListener("resize", () => {
     // redibujo estático al redimensionar
     const canvas = document.getElementById("dash-chart");
@@ -488,71 +486,12 @@
   });
 
   /* ---------- Amenazas: datos compartidos entre la dona y las
-     tarjetas de "Amenazas activas en tu red". Mitigar una amenaza
-     reduce su peso aquí y redistribuye el resto, así ambas vistas
-     se mantienen consistentes. ---------- */
-  const THREATS = [
-    {
-      key: "ransomware",
-      label: "Ransomware",
-      pct: 22,
-      color: "#C4694A",
-      tips: [
-        "Aísla los respaldos fuera de línea para que un cifrado malicioso no los alcance.",
-        "Verifica que los backups se puedan restaurar correctamente al menos una vez al mes.",
-      ],
-    },
-    {
-      key: "bruteforce",
-      label: "Brute Force",
-      pct: 20,
-      color: "#6FBDB0",
-      tips: [
-        "Limita los intentos de inicio de sesión y bloquea la IP tras varios fallos consecutivos.",
-        "Exige contraseñas largas y activa un segundo factor en los accesos remotos.",
-      ],
-    },
-    {
-      key: "portscan",
-      label: "Port Scanning",
-      pct: 18,
-      color: "#D9B44A",
-      tips: [
-        "Cierra en tu firewall perimetral los puertos que no uses activamente.",
-        "Configura alertas ante barridos de puertos repetidos desde una misma IP.",
-      ],
-    },
-    {
-      key: "ddos",
-      label: "DDoS",
-      pct: 16,
-      color: "#4A90C4",
-      tips: [
-        "Activa límites de tasa (rate limiting) en los servicios expuestos a internet.",
-        "Evalúa un proveedor de mitigación DDoS si dependes de disponibilidad 24/7.",
-      ],
-    },
-    {
-      key: "botnet",
-      label: "Botnets Mirai",
-      pct: 14,
-      color: "#8C6FBD",
-      tips: [
-        "Cambia las contraseñas de fábrica de cámaras y demás dispositivos IoT.",
-        "Aísla los dispositivos IoT en una VLAN separada del resto de tu infraestructura.",
-      ],
-    },
-    {
-      key: "spoofing",
-      label: "Spoofing",
-      pct: 10,
-      color: "#8b99a6",
-      tips: [
-        "Habilita protección anti-spoofing (DHCP snooping / ARP inspection) en tus switches.",
-        "Verifica la identidad de dispositivos nuevos antes de otorgarles acceso a la red.",
-      ],
-    },
-  ];
+     tarjetas de "Amenazas activas en tu red". Se cargan desde
+     /api/threats en init() (key, label, pct, color, tips ya vienen
+     armados desde el servidor). Mitigar una amenaza reduce su peso
+     aquí y redistribuye el resto, así ambas vistas se mantienen
+     consistentes (esto sigue siendo solo client-side, no persiste). */
+  let THREATS = [];
   const mitigatedThreats = new Set();
 
   /* ---------- Distribución de amenazas (dona animada) ---------- */
@@ -608,7 +547,8 @@
     gsap.to(state, { p: 1, duration: 1.6, ease: "power2.out", onUpdate: () => render(state.p) });
   }
 
-  drawDistribution();
+  // drawDistribution() se invoca por primera vez desde init(), una vez
+  // que /api/threats responde.
   window.addEventListener("resize", () => {
     const canvas = document.getElementById("distChart");
     if (canvas) drawDistribution();
@@ -744,7 +684,58 @@
     });
   }
 
-  renderThreatCards();
+  // renderThreatCards() se invoca por primera vez desde init(), una vez
+  // que /api/threats responde.
+
+  /* ---------- Carga inicial desde la base de datos ----------
+     Sustituye la generación aleatoria anterior: cada bloque de la UI
+     pide sus datos reales a la API (Next.js + Drizzle + Postgres/Neon)
+     y luego usa exactamente las mismas funciones de render de siempre. */
+  async function init() {
+    try {
+      const stats = await fetch("/api/stats").then((r) => r.json());
+      packets = stats.packets;
+      detected = stats.detected;
+      blocked = stats.blocked;
+      animateNumber(elPackets, packets, 2.2);
+      animateNumber(elDetected, detected, 2);
+      animateNumber(elBlocked, blocked, 2);
+    } catch (e) {
+      console.error("No se pudo cargar /api/stats", e);
+    }
+
+    try {
+      const alerts = await fetch("/api/alerts?limit=" + MAX_ROWS).then((r) => r.json());
+      // La API devuelve del más reciente al más antiguo; se recorre al
+      // revés para que addAlert() (que hace prepend) deje el más
+      // reciente arriba, igual que la semilla original.
+      alerts
+        .slice()
+        .reverse()
+        .forEach((a) => addAlert({ time: new Date(a.time), ip: a.ip, type: a.type, prob: a.prob, blocked: a.blocked }, false));
+    } catch (e) {
+      console.error("No se pudo cargar /api/alerts", e);
+    }
+
+    try {
+      hourlyData = await fetch("/api/hourly").then((r) => r.json());
+      drawChart();
+    } catch (e) {
+      console.error("No se pudo cargar /api/hourly", e);
+    }
+
+    try {
+      THREATS = await fetch("/api/threats").then((r) => r.json());
+      drawDistribution();
+      renderThreatCards();
+    } catch (e) {
+      console.error("No se pudo cargar /api/threats", e);
+    }
+
+    startLiveSimulation();
+  }
+
+  init();
 
   /* ---------- Punto de integración con el appliance real ----------
      Cuando el motor de inferencia exponga un WebSocket, sustituir la
