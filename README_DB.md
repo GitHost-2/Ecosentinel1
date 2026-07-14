@@ -170,6 +170,104 @@ const allUsers = await db
   .from(users);
 ```
 
+## Conectar la Raspberry Pi (datos reales, no simulados)
+
+Esto reemplaza el feed "en vivo" simulado por eventos reales del appliance.
+
+### 1. Variable de entorno nueva: `INGEST_HMAC_SECRET`
+
+Genera un secreto y agrégalo en Vercel (**Settings -> Environment
+Variables**) y en tu `.env` local:
+```bash
+openssl rand -hex 32
+```
+Se usa para autenticar las API keys de cada dispositivo y para hashear
+(HMAC) las IPs de origen antes de guardarlas — nunca se guarda la IP en
+texto plano. Si este secreto cambia, todas las API keys ya emitidas dejan
+de funcionar.
+
+### 2. Da de alta la Raspberry Pi como dispositivo real
+
+```bash
+npm run db:create-device -- --cliente "Nombre del cliente" --plan Pro
+```
+
+Esto imprime una **API key en texto plano una sola vez** (la base de
+datos solo guarda su hash, no se puede recuperar después). Cópiala a la
+RPi — por ejemplo como variable de entorno `ECOSENTINEL_API_KEY` en el
+script de inferencia.
+
+### 3. Qué debe mandar la RPi por cada detección
+
+`POST https://<tu-dominio-de-vercel>/api/ingest/detections`
+
+Headers:
+```
+Authorization: Bearer <la API key del paso 2>
+Content-Type: application/json
+```
+
+Body:
+```json
+{
+  "attack_prob": 0.94,
+  "attack_type": "Port Scanning",
+  "protocol": "TCP",
+  "src_ip": "192.168.1.57",
+  "dst_port": 443,
+  "timestamp": "2026-07-14T22:10:03Z"
+}
+```
+
+- `attack_type` debe ser exactamente uno de: `Ransomware`, `DDoS`,
+  `Port Scanning`, `Botnet Mirai`, `Brute Force`, `Spoofing`.
+- `src_ip` va en texto plano en la petición (viaja cifrado por HTTPS); el
+  servidor la hashea con HMAC antes de guardarla — la RPi nunca necesita
+  hashear nada de su lado.
+- `timestamp` es opcional (default: la hora del servidor al recibir la
+  petición).
+
+Ejemplo mínimo en Python (si tu script de inferencia ya está en Python):
+```python
+import requests
+
+requests.post(
+    "https://tu-dominio.vercel.app/api/ingest/detections",
+    headers={"Authorization": "Bearer " + API_KEY},
+    json={
+        "attack_prob": prob,
+        "attack_type": attack_type,
+        "protocol": protocol,
+        "src_ip": src_ip,
+        "dst_port": dst_port,
+    },
+    timeout=5,
+)
+```
+
+### 4. Heartbeats (salud del dispositivo)
+
+`POST /api/ingest/heartbeat`, mismo header `Authorization`:
+```json
+{ "cpu_pct": 34.2, "ram_pct": 51.8, "modelo_version": "rf-v1.3" }
+```
+
+### 5. Cómo se ve reflejado en el dashboard
+
+El dashboard ya no simula nada: `public/js/dashboard.js` hace *polling*
+cada 6 segundos contra `/api/stats` y `/api/alerts` (y cada ~30s contra
+`/api/hourly` y `/api/threats`). En cuanto la RPi manda un evento real,
+aparece en el siguiente ciclo de polling — no hace falta tocar el
+frontend para nada más.
+
+### 6. Varios dispositivos / varios clientes
+
+Repite el paso 2 (`db:create-device`) por cada cliente/RPi. Cada uno
+tiene su propia API key y sus propias filas en `detections` /
+`device_heartbeats` vía `device_id`. Hoy el dashboard no filtra por
+dispositivo (muestra todo junto) — si vas a tener más de un cliente
+activo, avísame para agregar ese filtro antes de que sea un problema.
+
 ## Notas y decisiones a revisar
 
 - **`attack_type`**: se agregó a `detections` aunque no estaba en el

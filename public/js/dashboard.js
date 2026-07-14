@@ -1,15 +1,12 @@
 /* ============================================================
    EcoSentinel — dashboard.js
-   Panel de monitoreo. Los valores iniciales (contadores, alertas,
-   gráfico de 24h y distribución de amenazas) se cargan desde Postgres
-   vía /api/stats, /api/alerts, /api/hourly y /api/threats. El feed
-   "en vivo" que se ve tras la carga inicial sigue siendo una
-   simulación visual client-side (aún no hay eventos reales del
-   appliance) — no se escribe en la base de datos.
-   Cuando se conecte al appliance real, esos ticks simulados se
-   sustituirán por eventos entrantes vía WebSocket desde el motor de
-   inferencia. La función connectLive() deja preparado ese punto de
-   integración.
+   Panel de monitoreo con datos 100% reales de Postgres. La carga
+   inicial (contadores, alertas, gráfico de 24h, distribución de
+   amenazas) viene de /api/stats, /api/alerts, /api/hourly y
+   /api/threats. A partir de ahí, startLivePolling() vuelve a pedir esos
+   mismos endpoints cada pocos segundos: cuando la Raspberry Pi manda una
+   detección real a /api/ingest/detections, aparece aquí en el siguiente
+   ciclo de polling. Ya no hay ningún Math.random() generando datos.
    ============================================================ */
 
 (function () {
@@ -316,22 +313,8 @@
   const elBlocked = document.getElementById("statBlocked");
 
   /* ---------- Feed de alertas ---------- */
-  const ATTACK_TYPES = ["Ransomware", "DDoS", "Port Scanning", "Botnet Mirai", "Brute Force", "Spoofing"];
-
-  function randIP() {
-    const pools = ["192.168", "10.0", "172.16", "45.83", "185.220", "103.94"];
-    const base = pools[Math.floor(Math.random() * pools.length)];
-    return `${base}.${Math.floor(Math.random() * 255)}.${Math.floor(Math.random() * 255)}`;
-  }
   function fmtTime(d) {
     return d.toLocaleTimeString("es-MX", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
-  }
-
-  function makeAlert(date) {
-    const type = ATTACK_TYPES[Math.floor(Math.random() * ATTACK_TYPES.length)];
-    const prob = 0.72 + Math.random() * 0.279; // 0.72 - 0.999
-    const blocked = prob >= 0.1; // umbral 0.10 => casi siempre se bloquea
-    return { time: date || new Date(), ip: randIP(), type, prob, blocked };
   }
 
   const alertsBody = document.getElementById("alertsBody");
@@ -368,33 +351,61 @@
     }
   }
 
-  // Alertas iniciales: se cargan desde /api/alerts en init().
-  // Nuevas alertas periódicas (simulación visual de tráfico en vivo;
-  // aún no hay eventos reales del appliance, no se escribe en la BD)
-  function liveTick() {
-    const a = makeAlert(new Date());
-    addAlert(a, true);
-    // actualizar contadores
-    packets += Math.floor(Math.random() * 500) + 120;
-    detected += 1;
-    if (a.blocked) blocked += 1;
-    if (elPackets) elPackets.textContent = packets.toLocaleString("es-MX");
-    if (elDetected) elDetected.textContent = detected.toLocaleString("es-MX");
-    if (elBlocked) elBlocked.textContent = blocked.toLocaleString("es-MX");
-    refreshThreatCounts();
+  // Alertas iniciales: se cargan desde /api/alerts en init(). A partir de
+  // ahí, el "tiempo real" es polling contra la API real (ver
+  // startLivePolling), no simulación: cuando la Raspberry Pi manda una
+  // detección a /api/ingest/detections, aparece aquí unos segundos
+  // después, con datos reales de la base.
+  const POLL_INTERVAL_MS = 6000;
+  const HEAVY_POLL_EVERY = 5; // refresca hourly/threats cada N polls (~30s)
+  const knownAlertIds = new Set();
+  let pollCount = 0;
 
-    setTimeout(liveTick, 3500 + Math.random() * 4000);
+  async function pollStatsAndAlerts() {
+    try {
+      const stats = await fetch("/api/stats").then((r) => r.json());
+      if (stats.packets !== packets) tweenStatTo(elPackets, packets, stats.packets, 1);
+      if (stats.detected !== detected) tweenStatTo(elDetected, detected, stats.detected, 1);
+      if (stats.blocked !== blocked) tweenStatTo(elBlocked, blocked, stats.blocked, 1);
+      packets = stats.packets;
+      detected = stats.detected;
+      blocked = stats.blocked;
+      refreshThreatCounts();
+    } catch (e) {
+      console.error("No se pudo refrescar /api/stats", e);
+    }
+
+    try {
+      const alerts = await fetch("/api/alerts?limit=20").then((r) => r.json());
+      const fresh = alerts.filter((a) => !knownAlertIds.has(a.id)).reverse(); // más viejo primero
+      fresh.forEach((a) => {
+        knownAlertIds.add(a.id);
+        addAlert({ time: new Date(a.time), ip: a.ip, type: a.type, prob: a.prob, blocked: a.blocked }, true);
+      });
+    } catch (e) {
+      console.error("No se pudo refrescar /api/alerts", e);
+    }
+
+    pollCount++;
+    if (pollCount % HEAVY_POLL_EVERY === 0) {
+      try {
+        hourlyData = await fetch("/api/hourly").then((r) => r.json());
+        drawChart();
+      } catch (e) {
+        console.error("No se pudo refrescar /api/hourly", e);
+      }
+      try {
+        THREATS = await fetch("/api/threats").then((r) => r.json());
+        drawDistribution();
+        renderThreatCards();
+      } catch (e) {
+        console.error("No se pudo refrescar /api/threats", e);
+      }
+    }
   }
 
-  function startLiveSimulation() {
-    setTimeout(liveTick, 4000);
-    // Incremento continuo de paquetes analizados
-    if (!REDUCED) {
-      setInterval(() => {
-        packets += Math.floor(Math.random() * 90) + 20;
-        if (elPackets) elPackets.textContent = packets.toLocaleString("es-MX");
-      }, 1200);
-    }
+  function startLivePolling() {
+    setInterval(pollStatsAndAlerts, POLL_INTERVAL_MS);
   }
 
   /* ---------- Gráfico 24h (canvas nativo) ----------
@@ -712,7 +723,10 @@
       alerts
         .slice()
         .reverse()
-        .forEach((a) => addAlert({ time: new Date(a.time), ip: a.ip, type: a.type, prob: a.prob, blocked: a.blocked }, false));
+        .forEach((a) => {
+          knownAlertIds.add(a.id);
+          addAlert({ time: new Date(a.time), ip: a.ip, type: a.type, prob: a.prob, blocked: a.blocked }, false);
+        });
     } catch (e) {
       console.error("No se pudo cargar /api/alerts", e);
     }
@@ -732,29 +746,8 @@
       console.error("No se pudo cargar /api/threats", e);
     }
 
-    startLiveSimulation();
+    startLivePolling();
   }
 
   init();
-
-  /* ---------- Punto de integración con el appliance real ----------
-     Cuando el motor de inferencia exponga un WebSocket, sustituir la
-     simulación anterior por algo como:
-
-     function connectLive(url) {
-       const ws = new WebSocket(url);
-       ws.onmessage = (msg) => {
-         const evt = JSON.parse(msg.data);
-         addAlert({
-           time: new Date(evt.timestamp),
-           ip: evt.src_ip,
-           type: evt.attack_type,
-           prob: evt.probability,
-           blocked: evt.action === "blocked",
-         }, true);
-       };
-       ws.onclose = () => document.getElementById("statusPill")
-         .classList.replace("online", "offline");
-     }
-  ------------------------------------------------------------------- */
 })();

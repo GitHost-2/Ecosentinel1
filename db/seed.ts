@@ -49,6 +49,11 @@ function randInt(min: number, max: number) {
 
 async function main() {
   console.log("Insertando dispositivo demo...");
+  // Este dispositivo es solo para que el seed tenga a quién asociar las
+  // detecciones falsas. Su api_key_hash es un placeholder que nunca va a
+  // matchear ninguna key real (ver lib/device-auth.ts), así que no puede
+  // usarse para mandar datos por /api/ingest/*. Para una RPi real, usa
+  // `npm run db:create-device` (genera una key de verdad).
   const [device] = await db
     .insert(devices)
     .values({

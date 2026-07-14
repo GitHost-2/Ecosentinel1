@@ -19,8 +19,10 @@ export async function GET(request: Request) {
     .limit(limit);
 
   // Shape compatible con el objeto "alerta" que ya consumía dashboard.js
-  // ({ time, ip, type, prob, blocked }), para no romper el render.
+  // ({ time, ip, type, prob, blocked }), + `id` para que el polling en
+  // vivo pueda deduplicar contra lo que ya está en pantalla.
   const alerts = rows.map((row) => ({
+    id: row.id,
     time: row.timestamp.toISOString(),
     ip: row.srcIpHash,
     type: row.attackType,
