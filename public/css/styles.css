@@ -1138,6 +1138,28 @@ section {
   padding: 6px 14px;
   border-radius: 999px;
 }
+.dash-title-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+}
+.device-select {
+  padding: 9px 14px;
+  border: 1.5px solid var(--border-med);
+  border-radius: 999px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  font-family: var(--font-body);
+  color: var(--text-1);
+  background: var(--surface-2);
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+.device-select:focus {
+  outline: none;
+  border-color: var(--teal);
+  box-shadow: 0 0 0 3px rgba(47, 143, 134, 0.22);
+}
 .status-pill {
   display: inline-flex;
   align-items: center;

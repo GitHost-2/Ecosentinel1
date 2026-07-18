@@ -108,6 +108,83 @@
     });
   }
 
+  /* ---------- Filtro de dispositivo ----------
+     Cuando hay más de un cliente/RPi mandando datos, permite ver el
+     dashboard agregado ("Todos los dispositivos") o filtrado a uno solo.
+     La selección persiste en sessionStorage. El pill de estado refleja
+     heartbeats reales (device_heartbeats vía /api/devices), no un valor
+     fijo: "online" si el dispositivo relevante mandó un heartbeat hace
+     menos de ONLINE_THRESHOLD_MS (ver app/api/devices/route.ts). */
+  const DEVICE_FILTER_KEY = "ecosentinel_device_filter";
+  let currentDeviceId = "";
+  try {
+    currentDeviceId = sessionStorage.getItem(DEVICE_FILTER_KEY) || "";
+  } catch (e) {}
+  let devicesList = [];
+
+  const deviceSelect = document.getElementById("deviceSelect");
+  const statusPill = document.getElementById("statusPill");
+
+  function withDeviceParam(url) {
+    if (!currentDeviceId) return url;
+    const sep = url.includes("?") ? "&" : "?";
+    return url + sep + "deviceId=" + encodeURIComponent(currentDeviceId);
+  }
+
+  function updateStatusPill() {
+    if (!statusPill) return;
+    const relevant = currentDeviceId
+      ? devicesList.filter((d) => String(d.id) === String(currentDeviceId))
+      : devicesList;
+    const anyOnline = relevant.length > 0 && relevant.some((d) => d.online);
+    statusPill.classList.toggle("online", anyOnline);
+    statusPill.classList.toggle("offline", !anyOnline);
+    statusPill.innerHTML = anyOnline
+      ? '<span class="dot"></span> Appliance conectado'
+      : '<span class="dot"></span> Appliance desconectado';
+  }
+
+  async function loadDevices() {
+    try {
+      devicesList = await fetch("/api/devices").then((r) => r.json());
+    } catch (e) {
+      console.error("No se pudo cargar /api/devices", e);
+      devicesList = [];
+    }
+
+    if (deviceSelect) {
+      const stillValid = devicesList.some((d) => String(d.id) === String(currentDeviceId));
+      if (!stillValid) currentDeviceId = "";
+
+      deviceSelect.innerHTML =
+        '<option value="">Todos los dispositivos</option>' +
+        devicesList.map((d) => `<option value="${d.id}">${d.nombreCliente}</option>`).join("");
+      deviceSelect.value = currentDeviceId;
+    }
+
+    updateStatusPill();
+  }
+
+  function resetAndReload() {
+    packets = 0;
+    detected = 0;
+    blocked = 0;
+    knownAlertIds.clear();
+    if (alertsBody) alertsBody.innerHTML = "";
+    loadDashboardData();
+  }
+
+  if (deviceSelect) {
+    deviceSelect.addEventListener("change", () => {
+      currentDeviceId = deviceSelect.value;
+      try {
+        sessionStorage.setItem(DEVICE_FILTER_KEY, currentDeviceId);
+      } catch (e) {}
+      updateStatusPill();
+      resetAndReload();
+    });
+  }
+
   /* ---------- Perfil de conocimiento ----------
      Ajusta el lenguaje y el nivel de detalle de las recomendaciones
      según lo que la persona respondió en el cuestionario de registro. */
@@ -320,6 +397,15 @@
   const alertsBody = document.getElementById("alertsBody");
   const MAX_ROWS = 8;
 
+  // `a.ip` es en realidad el hash HMAC-SHA256 (64 hex) de la IP de
+  // origen — nunca la IP real (ver hashSourceIp() en lib/device-auth.ts).
+  // Se trunca para que la tabla se vea legible; el hash completo queda
+  // en el atributo title por si hace falta compararlo/copiarlo.
+  function truncatedHash(hash) {
+    if (!hash || hash.length <= 12) return hash || "";
+    return hash.slice(0, 10) + "…";
+  }
+
   function rowHTML(a) {
     const pct = Math.round(a.prob * 100);
     const action = a.blocked
@@ -327,7 +413,7 @@
       : '<span class="badge allowed">Permitido</span>';
     return `
       <td>${fmtTime(a.time)}</td>
-      <td><span class="ip">${a.ip}</span></td>
+      <td><span class="ip" title="${a.ip}">${truncatedHash(a.ip)}</span></td>
       <td><span class="badge attack">${a.type}</span></td>
       <td>
         <div class="prob-bar">
@@ -363,7 +449,7 @@
 
   async function pollStatsAndAlerts() {
     try {
-      const stats = await fetch("/api/stats").then((r) => r.json());
+      const stats = await fetch(withDeviceParam("/api/stats")).then((r) => r.json());
       if (stats.packets !== packets) tweenStatTo(elPackets, packets, stats.packets, 1);
       if (stats.detected !== detected) tweenStatTo(elDetected, detected, stats.detected, 1);
       if (stats.blocked !== blocked) tweenStatTo(elBlocked, blocked, stats.blocked, 1);
@@ -376,7 +462,7 @@
     }
 
     try {
-      const alerts = await fetch("/api/alerts?limit=20").then((r) => r.json());
+      const alerts = await fetch(withDeviceParam("/api/alerts?limit=20")).then((r) => r.json());
       const fresh = alerts.filter((a) => !knownAlertIds.has(a.id)).reverse(); // más viejo primero
       fresh.forEach((a) => {
         knownAlertIds.add(a.id);
@@ -389,18 +475,19 @@
     pollCount++;
     if (pollCount % HEAVY_POLL_EVERY === 0) {
       try {
-        hourlyData = await fetch("/api/hourly").then((r) => r.json());
+        hourlyData = await fetch(withDeviceParam("/api/hourly")).then((r) => r.json());
         drawChart();
       } catch (e) {
         console.error("No se pudo refrescar /api/hourly", e);
       }
       try {
-        THREATS = await fetch("/api/threats").then((r) => r.json());
+        THREATS = await fetch(withDeviceParam("/api/threats")).then((r) => r.json());
         drawDistribution();
         renderThreatCards();
       } catch (e) {
         console.error("No se pudo refrescar /api/threats", e);
       }
+      loadDevices(); // refresca online/offline y la lista del selector
     }
   }
 
@@ -702,9 +789,9 @@
      Sustituye la generación aleatoria anterior: cada bloque de la UI
      pide sus datos reales a la API (Next.js + Drizzle + Postgres/Neon)
      y luego usa exactamente las mismas funciones de render de siempre. */
-  async function init() {
+  async function loadDashboardData() {
     try {
-      const stats = await fetch("/api/stats").then((r) => r.json());
+      const stats = await fetch(withDeviceParam("/api/stats")).then((r) => r.json());
       packets = stats.packets;
       detected = stats.detected;
       blocked = stats.blocked;
@@ -716,7 +803,7 @@
     }
 
     try {
-      const alerts = await fetch("/api/alerts?limit=" + MAX_ROWS).then((r) => r.json());
+      const alerts = await fetch(withDeviceParam("/api/alerts?limit=" + MAX_ROWS)).then((r) => r.json());
       // La API devuelve del más reciente al más antiguo; se recorre al
       // revés para que addAlert() (que hace prepend) deje el más
       // reciente arriba, igual que la semilla original.
@@ -732,20 +819,24 @@
     }
 
     try {
-      hourlyData = await fetch("/api/hourly").then((r) => r.json());
+      hourlyData = await fetch(withDeviceParam("/api/hourly")).then((r) => r.json());
       drawChart();
     } catch (e) {
       console.error("No se pudo cargar /api/hourly", e);
     }
 
     try {
-      THREATS = await fetch("/api/threats").then((r) => r.json());
+      THREATS = await fetch(withDeviceParam("/api/threats")).then((r) => r.json());
       drawDistribution();
       renderThreatCards();
     } catch (e) {
       console.error("No se pudo cargar /api/threats", e);
     }
+  }
 
+  async function init() {
+    await loadDevices();
+    await loadDashboardData();
     startLivePolling();
   }
 

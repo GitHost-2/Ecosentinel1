@@ -1,13 +1,17 @@
 import { NextResponse } from "next/server";
 import { sql } from "drizzle-orm";
 import { db } from "@/db";
+import { parseDeviceIdParam } from "@/lib/device-filter";
 
 export const dynamic = "force-dynamic";
 
 const BLOCK_THRESHOLD = 0.1;
 const HOURS = 24;
 
-export async function GET() {
+export async function GET(request: Request) {
+  const deviceId = parseDeviceIdParam(request);
+  const deviceCond = deviceId ? sql`and device_id = ${deviceId}` : sql``;
+
   const rows = await db.execute<{ hour_bucket: Date; detected: number; blocked: number }>(sql`
     select
       date_trunc('hour', "timestamp") as hour_bucket,
@@ -15,6 +19,7 @@ export async function GET() {
       count(*) filter (where attack_prob >= ${BLOCK_THRESHOLD})::int as blocked
     from detections
     where "timestamp" >= now() - interval '${sql.raw(String(HOURS))} hours'
+    ${deviceCond}
     group by hour_bucket
     order by hour_bucket
   `);

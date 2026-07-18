@@ -15,6 +15,20 @@
       "when": 1784044970922,
       "tag": "0001_grey_kingpin",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1784408652897,
+      "tag": "0002_faulty_lady_mastermind",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1784418468637,
+      "tag": "0003_mean_mindworm",
+      "breakpoints": true
     }
   ]
 }

@@ -249,24 +249,38 @@ requests.post(
 
 `POST /api/ingest/heartbeat`, mismo header `Authorization`:
 ```json
-{ "cpu_pct": 34.2, "ram_pct": 51.8, "modelo_version": "rf-v1.3" }
+{ "cpu_pct": 34.2, "ram_pct": 51.8, "modelo_version": "rf-v1.3", "packets_processed": 18234 }
 ```
+`packets_processed` es opcional (default 0) y es el **delta desde el
+heartbeat anterior**, no un contador acumulado — así un reinicio de la
+RPi no rompe el total. `/api/stats` hace `SUM(packets_processed)` sobre
+`device_heartbeats` para "Paquetes analizados"; ya no es una fórmula
+inventada, es un dato real que reporta la RPi.
 
 ### 5. Cómo se ve reflejado en el dashboard
 
 El dashboard ya no simula nada: `public/js/dashboard.js` hace *polling*
 cada 6 segundos contra `/api/stats` y `/api/alerts` (y cada ~30s contra
-`/api/hourly` y `/api/threats`). En cuanto la RPi manda un evento real,
-aparece en el siguiente ciclo de polling — no hace falta tocar el
-frontend para nada más.
+`/api/hourly`, `/api/threats` y `/api/devices`). En cuanto la RPi manda
+un evento real, aparece en el siguiente ciclo de polling — no hace falta
+tocar el frontend para nada más.
+
+El pill "Appliance conectado / desconectado" del header también es real:
+sale de `/api/devices`, que marca un dispositivo `online` si mandó un
+heartbeat hace menos de `ONLINE_THRESHOLD_MS` (3 minutos, ver
+`app/api/devices/route.ts` — ajusta ese valor si la RPi termina mandando
+heartbeats con otra frecuencia; hoy no hay un intervalo fijo definido del
+lado de la RPi).
 
 ### 6. Varios dispositivos / varios clientes
 
 Repite el paso 2 (`db:create-device`) por cada cliente/RPi. Cada uno
 tiene su propia API key y sus propias filas en `detections` /
-`device_heartbeats` vía `device_id`. Hoy el dashboard no filtra por
-dispositivo (muestra todo junto) — si vas a tener más de un cliente
-activo, avísame para agregar ese filtro antes de que sea un problema.
+`device_heartbeats` vía `device_id`. El dashboard ya filtra por
+dispositivo: el selector "Todos los dispositivos" en el header hace
+`GET` con `?deviceId=<id>` contra `/api/stats`, `/api/alerts`,
+`/api/hourly` y `/api/threats` (todos aceptan ese query param opcional).
+La lista de dispositivos para el selector sale de `/api/devices`.
 
 ## Notas y decisiones a revisar
 
@@ -278,19 +292,28 @@ activo, avísame para agregar ese filtro antes de que sea un problema.
   dímelo y lo ajusto.
 - **`src_ip_hash`**: en el seed de ejemplo contiene strings con forma de
   IP (p. ej. `185.220.14.203`), no un hash real, porque son datos
-  sintéticos. Cuando la Raspberry Pi empiece a mandar eventos reales, ese
-  campo debe llenarse con un hash (por ejemplo SHA-256) de la IP real,
-  calculado antes de insertar — nunca la IP en texto plano — para
-  preservar la privacidad de los clientes de tus PyMEs. Ese punto de
-  ingesta real todavía no existe (es la parte de "conectar la Raspberry
-  Pi", fuera del alcance de esta sesión).
-- **"Paquetes analizados"**: no hay una tabla de contadores de tráfico en
-  el esquema pedido, así que por ahora `/api/stats` deriva ese número de
-  forma determinística a partir del conteo de detecciones, solo para que
-  la cifra se vea en el mismo rango que el mock anterior. Cuando la RPi
-  reporte un contador real de paquetes (probablemente vía
-  `device_heartbeats` o una tabla nueva), hay que reemplazar esa fórmula
-  por la cifra real.
+  sintéticos — es solo para que el dashboard tenga algo que mostrar antes
+  de conectar la RPi. En producción, `/api/ingest/detections` ya calcula
+  el hash real: recibe `src_ip` en texto plano (viaja cifrado por HTTPS)
+  y lo hashea con HMAC-SHA256 (`hashSourceIp()` en `lib/device-auth.ts`,
+  usando `INGEST_HMAC_SECRET`) antes de insertar — la IP en texto plano
+  nunca toca la base de datos.
+- **"Paquetes analizados"**: resuelto — `device_heartbeats.packets_processed`
+  (migración `0003_mean_mindworm.sql`) guarda el delta real que reporta
+  cada heartbeat, y `/api/stats` hace `SUM()` sobre esa columna. Ya no
+  hay ninguna fórmula inventada. Si no hay heartbeats con datos reales
+  todavía, el número es honestamente 0.
+- **`attack_type` es una HEURÍSTICA, no una clasificación del modelo**:
+  el modelo real desplegado en la RPi (`ecosentinel_model_rpi.pkl`) es
+  un `RandomForestClassifier` **binario** (`classes_ = [0, 1]`, solo
+  ataque/no-ataque con una probabilidad) — no existe un clasificador de
+  las 6 familias. `inference_engine.py` (parche pendiente de revisión,
+  no aplicado aún a la RPi en producción) deriva `attack_type` con
+  reglas de protocolo/puerto/patrón de flujo (`heuristic_attack_type()`)
+  como aproximación honesta mientras no exista un modelo multiclase real
+  entrenado. CIC-IoT2023 (el dataset de entrenamiento) tampoco tiene una
+  categoría "Ransomware" propiamente — es tráfico de red de IoT, sin
+  señal de cifrado de archivos.
 - **Dos lockfiles**: el repo tenía `package-lock.json` y `pnpm-lock.yaml`
   a la vez. Se eliminó `pnpm-lock.yaml` y se regeneró `package-lock.json`
   con `npm install`, para no ambigüedad. Si usas pnpm, corre

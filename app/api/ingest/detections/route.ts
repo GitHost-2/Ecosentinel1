@@ -14,6 +14,10 @@ const VALID_ATTACK_TYPES = new Set([
   "Spoofing",
 ]);
 
+// Mismo vocabulario que emite inference_engine.py en la RPi (info["proto"]):
+// TCP / UDP / ICMP, con "OTHER" como fallback para el resto del tráfico.
+const VALID_PROTOCOLS = new Set(["TCP", "UDP", "ICMP", "OTHER"]);
+
 /**
  * Ingesta de una detección real de la Raspberry Pi.
  *
@@ -28,46 +32,75 @@ const VALID_ATTACK_TYPES = new Set([
  * }
  */
 export async function POST(request: Request) {
-  const deviceId = await authenticateDevice(request);
+  let deviceId: number | null;
+  try {
+    deviceId = await authenticateDevice(request);
+  } catch (err) {
+    console.error("[ingest/detections] fallo al autenticar dispositivo:", err);
+    return NextResponse.json({ error: "Error interno al autenticar." }, { status: 500 });
+  }
   if (!deviceId) {
+    console.error("[ingest/detections] API key inválida o ausente. authHeader presente:", request.headers.has("authorization"));
     return NextResponse.json({ error: "API key inválida o ausente." }, { status: 401 });
   }
 
   const body = await request.json().catch(() => null);
   if (!body) {
-    return NextResponse.json({ error: "Body inválido." }, { status: 400 });
+    console.error(`[ingest/detections] body no es JSON válido. deviceId=${deviceId}`);
+    return NextResponse.json({ error: "Body inválido: se esperaba JSON." }, { status: 400 });
   }
 
   const attackProb = Number(body.attack_prob);
-  const attackType = String(body.attack_type || "");
-  const protocol = String(body.protocol || "");
-  const srcIp = String(body.src_ip || "");
+  const attackType = String(body.attack_type ?? "");
+  const protocol = String(body.protocol ?? "").toUpperCase();
+  const srcIp = String(body.src_ip ?? "");
   const dstPort = Number(body.dst_port);
   const timestamp = body.timestamp ? new Date(body.timestamp) : new Date();
 
-  if (
-    Number.isNaN(attackProb) || attackProb < 0 || attackProb > 1 ||
-    !VALID_ATTACK_TYPES.has(attackType) ||
-    !protocol ||
-    !srcIp ||
-    !Number.isInteger(dstPort) || dstPort < 0 || dstPort > 65535 ||
-    Number.isNaN(timestamp.getTime())
-  ) {
-    return NextResponse.json({ error: "Datos de detección inválidos." }, { status: 400 });
+  const fieldErrors: string[] = [];
+  if (Number.isNaN(attackProb) || attackProb < 0 || attackProb > 1) {
+    fieldErrors.push("attack_prob debe ser un número entre 0 y 1.");
+  }
+  if (!VALID_ATTACK_TYPES.has(attackType)) {
+    fieldErrors.push(`attack_type debe ser uno de: ${[...VALID_ATTACK_TYPES].join(", ")}.`);
+  }
+  if (!VALID_PROTOCOLS.has(protocol)) {
+    fieldErrors.push(`protocol debe ser uno de: ${[...VALID_PROTOCOLS].join(", ")}.`);
+  }
+  if (!srcIp) {
+    fieldErrors.push("src_ip es requerido.");
+  }
+  if (!Number.isInteger(dstPort) || dstPort < 0 || dstPort > 65535) {
+    fieldErrors.push("dst_port debe ser un entero entre 0 y 65535.");
+  }
+  if (Number.isNaN(timestamp.getTime())) {
+    fieldErrors.push("timestamp inválido.");
   }
 
-  const [row] = await db
-    .insert(detections)
-    .values({
-      deviceId,
-      timestamp,
-      attackProb,
-      protocol,
-      attackType,
-      srcIpHash: hashSourceIp(srcIp),
-      dstPort,
-    })
-    .returning({ id: detections.id });
+  if (fieldErrors.length > 0) {
+    console.error(
+      `[ingest/detections] payload inválido. deviceId=${deviceId} errores=${fieldErrors.join(" | ")} body=${JSON.stringify(body)}`,
+    );
+    return NextResponse.json({ error: "Datos de detección inválidos.", details: fieldErrors }, { status: 400 });
+  }
 
-  return NextResponse.json({ id: row.id }, { status: 201 });
+  try {
+    const [row] = await db
+      .insert(detections)
+      .values({
+        deviceId,
+        timestamp,
+        attackProb,
+        protocol,
+        attackType,
+        srcIpHash: hashSourceIp(srcIp),
+        dstPort,
+      })
+      .returning({ id: detections.id });
+
+    return NextResponse.json({ id: row.id }, { status: 201 });
+  } catch (err) {
+    console.error(`[ingest/detections] fallo al insertar en DB. deviceId=${deviceId}:`, err);
+    return NextResponse.json({ error: "Error interno al guardar la detección." }, { status: 500 });
+  }
 }

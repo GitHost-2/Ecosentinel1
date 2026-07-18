@@ -1,0 +1,1 @@
+ALTER TABLE "device_heartbeats" ADD COLUMN "packets_processed" integer DEFAULT 0 NOT NULL;

@@ -3,17 +3,21 @@ import { sql } from "drizzle-orm";
 import { db } from "@/db";
 import { detections } from "@/db/schema";
 import { THREAT_META, type AttackTypeLabel } from "@/lib/threat-meta";
+import { parseDeviceIdParam } from "@/lib/device-filter";
 
 export const dynamic = "force-dynamic";
 
-export async function GET() {
+export async function GET(request: Request) {
+  const deviceId = parseDeviceIdParam(request);
+  const deviceCond = deviceId ? sql`and ${detections.deviceId} = ${deviceId}` : sql``;
+
   const rows = await db
     .select({
       attackType: detections.attackType,
       count: sql<number>`count(*)::int`,
     })
     .from(detections)
-    .where(sql`${detections.timestamp} >= now() - interval '30 days'`)
+    .where(sql`${detections.timestamp} >= now() - interval '30 days' ${deviceCond}`)
     .groupBy(detections.attackType);
 
   const total = rows.reduce((sum, r) => sum + r.count, 0) || 1;

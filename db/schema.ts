@@ -1,4 +1,4 @@
-import { pgTable, serial, text, timestamp, integer, real } from "drizzle-orm/pg-core";
+import { pgTable, serial, text, timestamp, integer, real, index, uniqueIndex } from "drizzle-orm/pg-core";
 
 // Cuentas creadas desde el formulario de registro del landing (empresa,
 // correo, plan, contraseña) + el perfil de conocimiento del cuestionario
@@ -21,7 +21,12 @@ export const devices = pgTable("devices", {
   apiKeyHash: text("api_key_hash").notNull(),
   fechaAlta: timestamp("fecha_alta", { withTimezone: true }).notNull().defaultNow(),
   plan: text("plan").notNull().default("Pro"),
-});
+}, (table) => [
+  // authenticateDevice() busca por este hash en CADA request de ingesta
+  // (la RPi va a mandar tráfico real de forma continua): sin índice sería
+  // un seq scan por cada detección/heartbeat.
+  uniqueIndex("devices_api_key_hash_idx").on(table.apiKeyHash),
+]);
 
 // Nota: `attackType` (Ransomware, DDoS, Port Scanning, Botnet Mirai,
 // Brute Force, Spoofing) se agregó junto a `protocol` porque la UI del
@@ -39,7 +44,14 @@ export const detections = pgTable("detections", {
   srcIpHash: text("src_ip_hash").notNull(),
   dstPort: integer("dst_port").notNull(),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-});
+}, (table) => [
+  // /api/alerts ordena por timestamp desc; /api/hourly y /api/threats
+  // filtran por rango de timestamp. Con tráfico real continuo esta tabla
+  // crece sin parar, así que ambos índices son necesarios para que esas
+  // queries no degraden con el tiempo.
+  index("detections_timestamp_idx").on(table.timestamp),
+  index("detections_device_id_timestamp_idx").on(table.deviceId, table.timestamp),
+]);
 
 export const deviceHeartbeats = pgTable("device_heartbeats", {
   id: serial("id").primaryKey(),
@@ -50,4 +62,10 @@ export const deviceHeartbeats = pgTable("device_heartbeats", {
   cpuPct: real("cpu_pct").notNull(),
   ramPct: real("ram_pct").notNull(),
   modeloVersion: text("modelo_version").notNull(),
-});
+  // Paquetes procesados por la RPi DESDE el heartbeat anterior (delta, no
+  // un contador acumulado) — así un reinicio de la RPi no rompe el total.
+  // /api/stats hace SUM() de esta columna en vez de una fórmula inventada.
+  packetsProcessed: integer("packets_processed").notNull().default(0),
+}, (table) => [
+  index("device_heartbeats_device_id_timestamp_idx").on(table.deviceId, table.timestamp),
+]);

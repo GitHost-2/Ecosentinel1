@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
-import { desc } from "drizzle-orm";
+import { desc, eq } from "drizzle-orm";
 import { db } from "@/db";
 import { detections } from "@/db/schema";
+import { parseDeviceIdParam } from "@/lib/device-filter";
 
 export const dynamic = "force-dynamic";
 
@@ -11,10 +12,10 @@ const DEFAULT_LIMIT = 8;
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const limit = Math.min(Number(searchParams.get("limit")) || DEFAULT_LIMIT, 50);
+  const deviceId = parseDeviceIdParam(request);
 
-  const rows = await db
-    .select()
-    .from(detections)
+  const baseQuery = db.select().from(detections);
+  const rows = await (deviceId ? baseQuery.where(eq(detections.deviceId, deviceId)) : baseQuery)
     .orderBy(desc(detections.timestamp))
     .limit(limit);
 
