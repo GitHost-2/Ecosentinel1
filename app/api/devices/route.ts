@@ -21,7 +21,7 @@ type DeviceRow = {
 };
 
 export async function GET() {
-  const rows = await db.execute<DeviceRow>(sql`
+  const result = await db.execute<DeviceRow>(sql`
     select
       d.id,
       d.nombre_cliente,
@@ -40,8 +40,10 @@ export async function GET() {
     order by d.id
   `);
 
+  // neon-http devuelve { rows, fields, ... } para SQL crudo, no un array
+  // directo (ver el mismo fix en app/api/hourly/route.ts).
   const now = Date.now();
-  const devices = (rows as unknown as DeviceRow[]).map((row) => {
+  const devices = result.rows.map((row) => {
     const lastHeartbeat = row.last_heartbeat ? new Date(row.last_heartbeat) : null;
     const online = !!lastHeartbeat && now - lastHeartbeat.getTime() <= ONLINE_THRESHOLD_MS;
     return {

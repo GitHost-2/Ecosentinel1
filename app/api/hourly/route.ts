@@ -12,7 +12,7 @@ export async function GET(request: Request) {
   const deviceId = parseDeviceIdParam(request);
   const deviceCond = deviceId ? sql`and device_id = ${deviceId}` : sql``;
 
-  const rows = await db.execute<{ hour_bucket: Date; detected: number; blocked: number }>(sql`
+  const result = await db.execute<{ hour_bucket: string; detected: number; blocked: number }>(sql`
     select
       date_trunc('hour', "timestamp") as hour_bucket,
       count(*)::int as detected,
@@ -24,8 +24,11 @@ export async function GET(request: Request) {
     order by hour_bucket
   `);
 
+  // neon-http (usado en producción) devuelve { rows, fields, ... } para
+  // db.execute() con SQL crudo, NO un array directo — iterar el
+  // resultado en sí (en vez de result.rows) tira "not iterable" en runtime.
   const byHour = new Map<number, { detected: number; blocked: number }>();
-  for (const row of rows as unknown as { hour_bucket: string; detected: number; blocked: number }[]) {
+  for (const row of result.rows) {
     byHour.set(new Date(row.hour_bucket).getTime(), { detected: row.detected, blocked: row.blocked });
   }
 
