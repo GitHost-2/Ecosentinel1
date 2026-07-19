@@ -21,6 +21,10 @@ export const devices = pgTable("devices", {
   apiKeyHash: text("api_key_hash").notNull(),
   fechaAlta: timestamp("fecha_alta", { withTimezone: true }).notNull().defaultNow(),
   plan: text("plan").notNull().default("Pro"),
+  // Cuenta (users) dueña de este dispositivo — a quién se le manda la
+  // alerta por correo cuando detecta un ataque. Nullable: un dispositivo
+  // recién creado con db:create-device no tiene dueño hasta asignarlo.
+  ownerUserId: integer("owner_user_id").references(() => users.id, { onDelete: "set null" }),
 }, (table) => [
   // authenticateDevice() busca por este hash en CADA request de ingesta
   // (la RPi va a mandar tráfico real de forma continua): sin índice sería
@@ -51,6 +55,22 @@ export const detections = pgTable("detections", {
   // queries no degraden con el tiempo.
   index("detections_timestamp_idx").on(table.timestamp),
   index("detections_device_id_timestamp_idx").on(table.deviceId, table.timestamp),
+]);
+
+// Registro de cada correo de alerta realmente enviado. Sirve para el
+// límite de frecuencia (máx. 1 correo cada ALERT_COOLDOWN_MS por
+// dispositivo — ver lib/alerts.ts) y para poder auditar cuándo se avisó
+// a un cliente ante un incidente real.
+export const alertLog = pgTable("alert_log", {
+  id: serial("id").primaryKey(),
+  deviceId: integer("device_id")
+    .notNull()
+    .references(() => devices.id, { onDelete: "cascade" }),
+  detectionId: integer("detection_id").references(() => detections.id, { onDelete: "set null" }),
+  recipientEmail: text("recipient_email").notNull(),
+  sentAt: timestamp("sent_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [
+  index("alert_log_device_id_sent_at_idx").on(table.deviceId, table.sentAt),
 ]);
 
 export const deviceHeartbeats = pgTable("device_heartbeats", {

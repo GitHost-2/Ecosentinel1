@@ -282,6 +282,57 @@ dispositivo: el selector "Todos los dispositivos" en el header hace
 `/api/hourly` y `/api/threats` (todos aceptan ese query param opcional).
 La lista de dispositivos para el selector sale de `/api/devices`.
 
+## Alertas por correo cuando hay un ataque
+
+Cada vez que `/api/ingest/detections` guarda una detección real, intenta
+(sin bloquear la respuesta a la RPi, vía `after()` de Next.js) mandarle
+un correo al dueño del dispositivo. Máximo **1 correo cada 10 minutos
+por dispositivo** — el resto se agrupa en silencio (ver
+`lib/alerts.ts`); es la única forma de que una ráfaga de detecciones
+(un ataque de volumen alto real, o un bug) no te llene la bandeja.
+
+### 1. Variables de entorno nuevas
+
+En Vercel (**Settings -> Environment Variables**) y en tu `.env` local:
+
+```
+RESEND_API_KEY=<tu api key de resend.com>
+ALERT_FROM_EMAIL="EcoSentinel <alertas@tudominio.com>"   # opcional, default onboarding@resend.dev
+DASHBOARD_URL=https://tu-dominio.vercel.app/dashboard    # opcional, default hardcodeado en lib/email.ts
+```
+
+Crea una cuenta gratis en [resend.com](https://resend.com). **Importante**:
+sin verificar un dominio propio en Resend, el modo sandbox solo entrega
+correos a la dirección con la que te registraste ahí — no le va a
+llegar a tus clientes reales hasta que verifiques un dominio (Resend ->
+Domains -> Add Domain, agregar los registros DNS que te da).
+
+### 2. Ligar un dispositivo a la cuenta que debe recibir sus alertas
+
+`devices.owner_user_id` (nuevo, nullable) apunta a `users.id`. Un
+dispositivo sin dueño asignado nunca manda alertas (se salta en
+silencio, sin loggear nada).
+
+Para un dispositivo nuevo:
+```bash
+npm run db:create-device -- --cliente "Nombre del cliente" --plan Pro --owner-email dueno@empresa.com
+```
+
+Para uno que ya existe, desde el SQL Editor de Neon:
+```sql
+UPDATE devices SET owner_user_id = (SELECT id FROM users WHERE email = 'dueno@empresa.com') WHERE id = <id_del_dispositivo>;
+```
+
+### 3. Auditoría de alertas enviadas
+
+`alert_log` guarda cada correo que realmente se mandó (no los que se
+agruparon por el límite de frecuencia, ni los que fallaron):
+```sql
+SELECT a.sent_at, d.nombre_cliente, a.recipient_email
+FROM alert_log a JOIN devices d ON d.id = a.device_id
+ORDER BY a.sent_at DESC LIMIT 50;
+```
+
 ## Notas y decisiones a revisar
 
 - **`attack_type`**: se agregó a `detections` aunque no estaba en el

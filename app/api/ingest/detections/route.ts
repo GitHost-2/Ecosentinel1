@@ -1,7 +1,8 @@
-import { NextResponse } from "next/server";
+import { NextResponse, after } from "next/server";
 import { db } from "@/db";
 import { detections } from "@/db/schema";
 import { authenticateDevice, hashSourceIp } from "@/lib/device-auth";
+import { maybeSendAttackAlert } from "@/lib/alerts";
 
 export const dynamic = "force-dynamic";
 
@@ -97,6 +98,21 @@ export async function POST(request: Request) {
         dstPort,
       })
       .returning({ id: detections.id });
+
+    // Fuera de la respuesta a la RPi: nunca debe agregar latencia a la
+    // ingesta ni hacer que un fallo de correo tumbe un 201 que ya es
+    // válido (la detección ya está guardada).
+    after(() =>
+      maybeSendAttackAlert({
+        deviceId,
+        detectionId: row.id,
+        attackType,
+        attackProb,
+        protocol,
+        dstPort,
+        timestamp,
+      }),
+    );
 
     return NextResponse.json({ id: row.id }, { status: 201 });
   } catch (err) {
