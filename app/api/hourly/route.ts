@@ -5,7 +5,8 @@ import { parseDeviceIdParam } from "@/lib/device-filter";
 
 export const dynamic = "force-dynamic";
 
-const BLOCK_THRESHOLD = 0.1;
+// Umbral de "alta confianza" para contar como bloqueado (ver app/api/stats/route.ts).
+const BLOCK_THRESHOLD = 0.7;
 const HOURS = 24;
 
 export async function GET(request: Request) {

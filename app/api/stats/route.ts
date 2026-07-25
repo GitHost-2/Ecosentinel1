@@ -6,8 +6,10 @@ import { parseDeviceIdParam } from "@/lib/device-filter";
 
 export const dynamic = "force-dynamic";
 
-// Umbral calibrado del modelo (mismo valor que se muestra en el dashboard).
-const BLOCK_THRESHOLD = 0.1;
+// Umbral de "alta confianza" para contar como bloqueado (el modelo ya decide
+// qué es un ataque en 0.10; este es más alto para que "bloqueado" no sea
+// siempre igual a "detectado").
+const BLOCK_THRESHOLD = 0.7;
 
 export async function GET(request: Request) {
   const deviceId = parseDeviceIdParam(request);

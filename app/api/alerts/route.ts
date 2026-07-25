@@ -6,7 +6,8 @@ import { parseDeviceIdParam } from "@/lib/device-filter";
 
 export const dynamic = "force-dynamic";
 
-const BLOCK_THRESHOLD = 0.1;
+// Umbral de "alta confianza" para marcar la fila como bloqueada (ver app/api/stats/route.ts).
+const BLOCK_THRESHOLD = 0.7;
 const DEFAULT_LIMIT = 8;
 
 export async function GET(request: Request) {
