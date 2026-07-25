@@ -1,10 +1,4 @@
-/* ============================================================
-   EcoSentinel — animations.js
-   GSAP: navbar, texto cifrado/descifrado en todos los títulos,
-   crawl horizontal de "Seis vectores..." con fondo de red
-   neuronal roja, carrusel de amenazas, pipeline,
-   "¿Por qué nosotros?" y precios.
-   ============================================================ */
+/* EcoSentinel — animations.js (GSAP: navbar, scramble, canvases, carrusel, pipeline, precios) */
 
 (function () {
   "use strict";
@@ -13,9 +7,7 @@
 
   gsap.registerPlugin(ScrollTrigger, ScrollToPlugin, SplitText, ScrambleTextPlugin);
 
-  /* ============================================================
-     1. NAVBAR — transición transparente -> sólida con ScrollTrigger
-  ============================================================= */
+  /* ---------- 1. Navbar: transparente -> sólida con scroll ---------- */
   function initNavbar() {
     const navbar = document.getElementById("navbar");
     if (!navbar) return;
@@ -47,9 +39,7 @@
     }
   }
 
-  /* ============================================================
-     2. SMOOTH SCROLL — links de navegación
-  ============================================================= */
+  /* ---------- 2. Smooth scroll de links de navegación ---------- */
   function initSmoothScroll() {
     document.querySelectorAll('a[href^="#"], [data-scroll]').forEach((link) => {
       link.addEventListener("click", (e) => {
@@ -67,13 +57,7 @@
     });
   }
 
-  /* ============================================================
-     3. TEXTO CIFRADO/DESCIFRADO (ScrambleTextPlugin)
-        Se usa en el título del hero y en todos los títulos de
-        sección: primero se ve el texto "encriptado" (revuelto) y
-        luego se descifra letra por letra, despacio y de forma
-        notoria (nada de instantáneo).
-  ============================================================= */
+  /* ---------- 3. Texto cifrado/descifrado (ScrambleTextPlugin) ---------- */
   function scrambleReveal(el, fullText, opts) {
     opts = opts || {};
     if (REDUCED) {
@@ -121,8 +105,7 @@
     scrambleReveal(el, fullText, { duration: 3.6, delay: 0.3, revealDelay: 0.6, onComplete: applyAccent });
   }
 
-  // Resto de títulos de sección (marcados con [data-scramble]): se
-  // descifran al entrar en la vista, una sola vez.
+  // Títulos [data-scramble]: se descifran al entrar en la vista, una sola vez.
   function initSectionScrambles() {
     document.querySelectorAll("[data-scramble]").forEach((el) => {
       const fullText = el.textContent.trim();
@@ -140,9 +123,7 @@
     });
   }
 
-  /* ============================================================
-     4. HERO — contadores animados desde 0 con snap
-  ============================================================= */
+  /* ---------- 4. Hero: contadores animados desde 0 ---------- */
   function formatCount(val, decimals, prefix, suffix) {
     const opts = { minimumFractionDigits: decimals, maximumFractionDigits: decimals };
     return prefix + val.toLocaleString("es-MX", opts) + suffix;
@@ -178,9 +159,7 @@
     });
   }
 
-  /* ============================================================
-     5. HERO — parallax sutil con ScrollTrigger
-  ============================================================= */
+  /* ---------- 5. Hero: parallax sutil ---------- */
   function initHeroParallax() {
     if (REDUCED) return;
     const inner = document.querySelector(".hero-inner");
@@ -202,9 +181,7 @@
     }
   }
 
-  /* ============================================================
-     6. HERO — canvas: topología de red viva con ciclo de infección
-  ============================================================= */
+  /* ---------- 6. Hero: canvas de red con ciclo de infección ---------- */
   function initHeroCanvas() {
     const canvas = document.getElementById("hero-canvas");
     if (!canvas) return;
@@ -341,9 +318,7 @@
     gsap.delayedCall(1.5, infectionCycle);
   }
 
-  /* ============================================================
-     7. AMENAZAS — fondo de red neuronal roja con calaveras
-  ============================================================= */
+  /* ---------- 7. Amenazas: fondo de red con calaveras ---------- */
   function initAmenazasCanvas() {
     const canvas = document.getElementById("amenazasCanvas");
     if (!canvas) return;
@@ -436,13 +411,7 @@
     if (!REDUCED) requestAnimationFrame(draw);
   }
 
-  /* ============================================================
-     8. AMENAZAS — titular "Seis vectores de ataque, un solo
-        guardián" en crawl horizontal fijado con scroll (pin +
-        SplitText vía containerAnimation). En pantallas angostas,
-        donde no hay espacio para un crawl, se revela con el mismo
-        efecto de cifrado/descifrado que el resto de los títulos.
-  ============================================================= */
+  /* ---------- 8. Amenazas: titular en crawl horizontal (pin + SplitText) ---------- */
   function initAmenazasHeading() {
     const wrapper = document.querySelector(".amenazas-heading-panel");
     const text = document.getElementById("amenazasHeading");
@@ -493,9 +462,7 @@
     });
   }
 
-  /* ============================================================
-     9. AMENAZAS — mini animaciones SVG por tarjeta (loops)
-  ============================================================= */
+  /* ---------- 9. Amenazas: mini animaciones SVG por tarjeta ---------- */
   function threatRansomware() {
     const scope = document.querySelector('[data-anim="ransomware"]');
     if (!scope) return;
@@ -618,12 +585,7 @@
     threatSpoofing();
   }
 
-  /* ============================================================
-     10. AMENAZAS — carrusel de tarjetas en bucle continuo
-        (adaptado de "CARTAS DE AMENAZAS": loop sin costuras;
-        estático, solo avanza con Siguiente/Anterior o al tocar
-        una tarjeta)
-  ============================================================= */
+  /* ---------- 10. Amenazas: carrusel de tarjetas en loop continuo ---------- */
   function buildSeamlessLoop(items, spacing, animateFunc) {
     let overlap = Math.ceil(1 / spacing),
       startTime = items.length * spacing + 0.5,
@@ -709,9 +671,7 @@
     });
   }
 
-  /* ============================================================
-     11. CÓMO FUNCIONA — pipeline con relleno por scroll + flow dot
-  ============================================================= */
+  /* ---------- 11. Cómo funciona: pipeline con relleno por scroll ---------- */
   function initPipeline() {
     const section = document.getElementById("como-funciona");
     if (!section) return;
@@ -767,9 +727,7 @@
     }
   }
 
-  /* ============================================================
-     12. ¿POR QUÉ NOSOTROS? — estadísticas reales de ciberataques
-  ============================================================= */
+  /* ---------- 12. ¿Por qué nosotros?: estadísticas animadas ---------- */
   function initWhyUs() {
     const section = document.getElementById("porque-nosotros");
     if (!section) return;
@@ -859,9 +817,7 @@
     });
   }
 
-  /* ============================================================
-     13. PRECIOS — entrada con stagger + hover con GSAP
-  ============================================================= */
+  /* ---------- 13. Precios: entrada con stagger + hover ---------- */
   function initPricing() {
     const cards = gsap.utils.toArray(".price-card");
     if (!cards.length) return;
@@ -890,9 +846,7 @@
     });
   }
 
-  /* ============================================================
-     INIT
-  ============================================================= */
+  /* ---------- Init ---------- */
   function init() {
     initNavbar();
     initHeroScramble();

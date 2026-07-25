@@ -4,11 +4,7 @@ import { db } from "@/db";
 
 export const dynamic = "force-dynamic";
 
-// Umbral para considerar un dispositivo "en línea": si su último
-// heartbeat es más viejo que esto, se marca offline. La RPi todavía no
-// tiene un intervalo de heartbeat fijo documentado (ver setup_rpi.sh);
-// 3 minutos da margen para un par de heartbeats perdidos sin marcar
-// offline de más. Ajustar si el intervalo real termina siendo otro.
+// Si el último heartbeat es más viejo que esto, el dispositivo se marca offline.
 const ONLINE_THRESHOLD_MS = 3 * 60 * 1000;
 
 type DeviceRow = {
@@ -40,8 +36,7 @@ export async function GET() {
     order by d.id
   `);
 
-  // neon-http devuelve { rows, fields, ... } para SQL crudo, no un array
-  // directo (ver el mismo fix en app/api/hourly/route.ts).
+  // neon-http devuelve { rows, fields, ... }, no un array directo.
   const now = Date.now();
   const devices = result.rows.map((row) => {
     const lastHeartbeat = row.last_heartbeat ? new Date(row.last_heartbeat) : null;

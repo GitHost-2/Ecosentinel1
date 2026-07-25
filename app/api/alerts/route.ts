@@ -19,9 +19,7 @@ export async function GET(request: Request) {
     .orderBy(desc(detections.timestamp))
     .limit(limit);
 
-  // Shape compatible con el objeto "alerta" que ya consumía dashboard.js
-  // ({ time, ip, type, prob, blocked }), + `id` para que el polling en
-  // vivo pueda deduplicar contra lo que ya está en pantalla.
+  // Shape que espera dashboard.js: { id, time, ip, type, prob, blocked }.
   const alerts = rows.map((row) => ({
     id: row.id,
     time: row.timestamp.toISOString(),

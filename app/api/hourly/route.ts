@@ -24,16 +24,13 @@ export async function GET(request: Request) {
     order by hour_bucket
   `);
 
-  // neon-http (usado en producción) devuelve { rows, fields, ... } para
-  // db.execute() con SQL crudo, NO un array directo — iterar el
-  // resultado en sí (en vez de result.rows) tira "not iterable" en runtime.
+  // neon-http devuelve { rows, fields, ... }, no un array directo.
   const byHour = new Map<number, { detected: number; blocked: number }>();
   for (const row of result.rows) {
     byHour.set(new Date(row.hour_bucket).getTime(), { detected: row.detected, blocked: row.blocked });
   }
 
-  // Mismo shape que consumía drawChart(): dos arrays paralelos de 24
-  // enteros, del más antiguo al más reciente.
+  // Dos arrays paralelos de 24 enteros, del más antiguo al más reciente (shape que espera drawChart()).
   const det: number[] = [];
   const blk: number[] = [];
   const now = new Date();

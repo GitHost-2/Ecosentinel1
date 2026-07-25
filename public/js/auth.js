@@ -1,10 +1,5 @@
-/* ============================================================
-   EcoSentinel — auth.js
-   Modales de login / registro. Las cuentas viven en Postgres (tabla
-   `users`, ver /api/auth/register, /api/auth/login, /api/auth/profile).
-   La sesión del navegador (sessionStorage) sigue siendo solo una copia
-   local de conveniencia para que dashboard.js sepa quién entró.
-   ============================================================ */
+/* EcoSentinel — auth.js
+   Modales de login/registro contra /api/auth/*; sessionStorage solo guarda la sesión local. */
 
 (function () {
   "use strict";
@@ -23,9 +18,7 @@
   };
 
   let lastFocused = null;
-  // Datos de registro a la espera de que se responda el cuestionario
-  // de perfil (ver initQuiz). Si el usuario cierra el cuestionario sin
-  // responder, se completa el registro con un perfil por defecto.
+  // Registro pendiente del cuestionario de perfil.
   let pendingRegistration = null;
 
   /* ---------- Abrir / cerrar con animación GSAP ---------- */
@@ -61,9 +54,7 @@
       overlay.classList.remove("open");
       document.body.style.overflow = "";
       if (lastFocused) lastFocused.focus();
-      // Si cierran el cuestionario sin responderlo, no dejamos al
-      // usuario atorado: completamos el registro con un perfil por
-      // defecto para que pueda entrar a su panel de todas formas.
+      // Cerrar el cuestionario sin responder no debe dejar al usuario atorado.
       if (name === "quiz" && pendingRegistration) {
         finishRegistration("intermedio");
       }
@@ -140,7 +131,6 @@
   }
 
   function saveSession(data) {
-    // Simulación: guardamos la sesión para que el dashboard la lea.
     try {
       sessionStorage.setItem("ecosentinel_session", JSON.stringify(data));
     } catch (err) {
@@ -165,8 +155,7 @@
       });
       if (!res.ok) throw new Error("profile update failed");
     } catch (err) {
-      // El registro ya existe en la BD; si esto falla, el perfil se
-      // queda en su default ("intermedio") y no bloquea el acceso.
+      // El perfil se queda en su default si esto falla; no bloquea el acceso.
     }
     const data = { ...pendingRegistration, profile };
     pendingRegistration = null;

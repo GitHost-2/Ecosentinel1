@@ -22,8 +22,7 @@ export async function GET(request: Request) {
 
   const total = rows.reduce((sum, r) => sum + r.count, 0) || 1;
 
-  // Mismo shape que consumía la dona y las tarjetas de "Amenazas activas":
-  // [{ key, label, pct, color, tips, count }]
+  // Shape que consumen la dona y las tarjetas: [{ key, label, pct, color, tips, count }]
   const threats = (Object.keys(THREAT_META) as AttackTypeLabel[]).map((label) => {
     const meta = THREAT_META[label];
     const row = rows.find((r) => r.attackType === label);

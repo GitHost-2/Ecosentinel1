@@ -3,17 +3,10 @@ import { db } from "@/db";
 import { devices, users, alertLog } from "@/db/schema";
 import { sendAttackAlertEmail } from "@/lib/email";
 
-// Máximo un correo cada 10 minutos por dispositivo. Sin esto, una
-// ráfaga de detecciones (un ataque de volumen alto real, o un bug como
-// el que ya vimos en producción) mandaría un correo por cada una.
+// Máximo un correo cada 10 min por dispositivo (evita ráfagas de alertas).
 const ALERT_COOLDOWN_MS = 10 * 60 * 1000;
 
-/**
- * Manda una alerta por correo al dueño del dispositivo cuando detecta un
- * ataque, respetando el enfriamiento de 10 min. Nunca lanza — un fallo
- * al mandar la alerta no debe afectar la ingesta de la detección (ya se
- * insertó en la BD antes de llamar a esto).
- */
+/** Manda alerta por correo al dueño del dispositivo, respetando el cooldown. Nunca lanza. */
 export async function maybeSendAttackAlert(params: {
   deviceId: number;
   detectionId: number;
@@ -26,7 +19,7 @@ export async function maybeSendAttackAlert(params: {
   try {
     const [device] = await db.select().from(devices).where(eq(devices.id, params.deviceId)).limit(1);
     if (!device || !device.ownerUserId) {
-      return; // dispositivo sin dueño asignado todavía, no hay a quién avisar
+      return; // sin dueño asignado, no hay a quién avisar
     }
 
     const [owner] = await db
@@ -45,7 +38,7 @@ export async function maybeSendAttackAlert(params: {
       .limit(1);
 
     if (lastAlert) {
-      return; // dentro de la ventana de enfriamiento -- se agrupa silenciosamente
+      return; // dentro del cooldown
     }
 
     const result = await sendAttackAlertEmail({

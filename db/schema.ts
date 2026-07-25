@@ -1,10 +1,7 @@
 import { pgTable, serial, text, timestamp, integer, real, index, uniqueIndex } from "drizzle-orm/pg-core";
 
-// Cuentas creadas desde el formulario de registro del landing (empresa,
-// correo, plan, contraseña) + el perfil de conocimiento del cuestionario
-// (principiante/intermedio/avanzado). Separada de `devices`: esta tabla es
-// la identidad de la persona que entra al dashboard; `devices` es la
-// identidad del appliance físico (RPi) que va a mandar detecciones.
+// Cuentas del landing (empresa, correo, plan, perfil de conocimiento).
+// Separada de `devices`: aquí vive la persona, allá el appliance físico.
 export const users = pgTable("users", {
   id: serial("id").primaryKey(),
   company: text("company").notNull(),
@@ -21,21 +18,14 @@ export const devices = pgTable("devices", {
   apiKeyHash: text("api_key_hash").notNull(),
   fechaAlta: timestamp("fecha_alta", { withTimezone: true }).notNull().defaultNow(),
   plan: text("plan").notNull().default("Pro"),
-  // Cuenta (users) dueña de este dispositivo — a quién se le manda la
-  // alerta por correo cuando detecta un ataque. Nullable: un dispositivo
-  // recién creado con db:create-device no tiene dueño hasta asignarlo.
+  // Dueño de este dispositivo, a quién avisar por correo. Nullable hasta que se asigne.
   ownerUserId: integer("owner_user_id").references(() => users.id, { onDelete: "set null" }),
 }, (table) => [
-  // authenticateDevice() busca por este hash en CADA request de ingesta
-  // (la RPi va a mandar tráfico real de forma continua): sin índice sería
-  // un seq scan por cada detección/heartbeat.
+  // authenticateDevice() busca por este hash en cada request de ingesta.
   uniqueIndex("devices_api_key_hash_idx").on(table.apiKeyHash),
 ]);
 
-// Nota: `attackType` (Ransomware, DDoS, Port Scanning, Botnet Mirai,
-// Brute Force, Spoofing) se agregó junto a `protocol` porque la UI del
-// dashboard necesita la familia de ataque clasificada por el modelo,
-// mientras que `protocol` describe la capa de red (TCP/UDP/ICMP).
+// `attackType`: familia de ataque (Ransomware/DDoS/etc). `protocol`: capa de red (TCP/UDP/ICMP).
 export const detections = pgTable("detections", {
   id: serial("id").primaryKey(),
   deviceId: integer("device_id")
@@ -49,18 +39,12 @@ export const detections = pgTable("detections", {
   dstPort: integer("dst_port").notNull(),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 }, (table) => [
-  // /api/alerts ordena por timestamp desc; /api/hourly y /api/threats
-  // filtran por rango de timestamp. Con tráfico real continuo esta tabla
-  // crece sin parar, así que ambos índices son necesarios para que esas
-  // queries no degraden con el tiempo.
+  // Índices para las queries por rango de timestamp de /api/alerts, /api/hourly y /api/threats.
   index("detections_timestamp_idx").on(table.timestamp),
   index("detections_device_id_timestamp_idx").on(table.deviceId, table.timestamp),
 ]);
 
-// Registro de cada correo de alerta realmente enviado. Sirve para el
-// límite de frecuencia (máx. 1 correo cada ALERT_COOLDOWN_MS por
-// dispositivo — ver lib/alerts.ts) y para poder auditar cuándo se avisó
-// a un cliente ante un incidente real.
+// Registro de cada correo de alerta enviado (ver lib/alerts.ts: cooldown + auditoría).
 export const alertLog = pgTable("alert_log", {
   id: serial("id").primaryKey(),
   deviceId: integer("device_id")
@@ -82,9 +66,7 @@ export const deviceHeartbeats = pgTable("device_heartbeats", {
   cpuPct: real("cpu_pct").notNull(),
   ramPct: real("ram_pct").notNull(),
   modeloVersion: text("modelo_version").notNull(),
-  // Paquetes procesados por la RPi DESDE el heartbeat anterior (delta, no
-  // un contador acumulado) — así un reinicio de la RPi no rompe el total.
-  // /api/stats hace SUM() de esta columna en vez de una fórmula inventada.
+  // Delta de paquetes desde el heartbeat anterior (no acumulado, para que un reinicio no rompa el total).
   packetsProcessed: integer("packets_processed").notNull().default(0),
 }, (table) => [
   index("device_heartbeats_device_id_timestamp_idx").on(table.deviceId, table.timestamp),

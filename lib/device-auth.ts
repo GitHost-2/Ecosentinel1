@@ -3,11 +3,8 @@ import { eq } from "drizzle-orm";
 import { db } from "@/db";
 import { devices } from "@/db/schema";
 
-// Secreto del servidor para hashear API keys de dispositivo e IPs de
-// origen. NUNCA usar un SHA-256 "pelón" para la IP: el espacio de
-// direcciones IPv4 es tan chico (~4 mil millones) que un hash sin llave
-// se puede invertir por fuerza bruta en minutos. HMAC con este secreto
-// lo evita. Debe vivir SOLO en variables de entorno del servidor.
+// Secreto del servidor para hashear API keys e IPs (HMAC, nunca SHA-256
+// simple: el espacio de IPv4 es reversible por fuerza bruta sin llave).
 const SECRET = process.env.INGEST_HMAC_SECRET;
 if (!SECRET) {
   throw new Error(
@@ -49,8 +46,7 @@ export async function authenticateDevice(request: Request): Promise<number | nul
 
   if (!device) return null;
 
-  // Comparación en tiempo constante (aunque ya comparamos hashes
-  // completos, es una buena práctica no depender de `===` para secretos).
+  // Comparación en tiempo constante para el hash.
   const a = Buffer.from(tokenHash);
   const b = Buffer.from(device.apiKeyHash);
   if (a.length !== b.length || !timingSafeEqual(a, b)) return null;

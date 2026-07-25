@@ -27,11 +27,8 @@ const VALID_PROTOCOLS = new Set(["TCP", "UDP", "ICMP", "OTHER"]);
  *   "attack_prob": 0.94,          // float 0-1, salida del modelo
  *   "attack_type": "Port Scanning", // una de las 6 familias soportadas
  *   "protocol": "TCP",            // capa de red: TCP/UDP/ICMP/...
- *   "src_ip": "a3f1c9d0e2b4d7f8",  // ya viene hasheada (HMAC-SHA256) desde la RPi con su
- *                                  // .device_salt local (ver hash_ip() en inference_engine.py);
- *                                  // la IP real nunca sale del dispositivo. El servidor vuelve
- *                                  // a aplicar HMAC (INGEST_HMAC_SECRET, ver hashSourceIp()) como
- *                                  // segunda capa antes de guardar en detections.src_ip_hash.
+ *   "src_ip": "a3f1c9d0e2b4d7f8",  // ya viene hasheada por la RPi (hash_ip());
+ *                                  // el servidor aplica una segunda capa de HMAC (hashSourceIp())
  *   "dst_port": 443,
  *   "timestamp": "2026-07-14T22:10:03Z" // opcional, default = ahora
  * }
@@ -103,9 +100,7 @@ export async function POST(request: Request) {
       })
       .returning({ id: detections.id });
 
-    // Fuera de la respuesta a la RPi: nunca debe agregar latencia a la
-    // ingesta ni hacer que un fallo de correo tumbe un 201 que ya es
-    // válido (la detección ya está guardada).
+    // Fuera de la respuesta: un fallo de correo no debe afectar el 201.
     after(() =>
       maybeSendAttackAlert({
         deviceId,

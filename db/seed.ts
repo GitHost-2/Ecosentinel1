@@ -1,17 +1,8 @@
 /**
- * Seed de datos de ejemplo para desarrollo/demo.
- * Genera un dispositivo demo y detecciones distribuidas en los últimos
- * 14 días con el mismo rango de valores que usaba el mock data anterior
- * (public/js/dashboard.js): attack_prob 0.72-0.999, ~4-20 detecciones
- * por hora, 6 familias de ataque con la misma proporción que la UI
- * mostraba en la dona de distribución.
- *
- * IMPORTANTE: `src_ip_hash` aquí contiene strings con forma de IP solo
- * para fines de demo/visual. Cuando la Raspberry Pi mande eventos
- * reales, ese campo debe llenarse con un hash (p. ej. sha256) de la IP
- * real, calculado antes de insertar, nunca la IP en texto plano.
- *
- * Uso: npm run db:seed  (requiere DATABASE_URL configurado)
+ * Seed de datos de ejemplo para desarrollo/demo (dispositivo + detecciones
+ * de los últimos 14 días). `src_ip_hash` aquí es un string con forma de IP
+ * solo para fines visuales, no un hash real.
+ * Uso: npm run db:seed (requiere DATABASE_URL)
  */
 import "dotenv/config";
 import { db } from "./index";
@@ -49,11 +40,7 @@ function randInt(min: number, max: number) {
 
 async function main() {
   console.log("Insertando dispositivo demo...");
-  // Este dispositivo es solo para que el seed tenga a quién asociar las
-  // detecciones falsas. Su api_key_hash es un placeholder que nunca va a
-  // matchear ninguna key real (ver lib/device-auth.ts), así que no puede
-  // usarse para mandar datos por /api/ingest/*. Para una RPi real, usa
-  // `npm run db:create-device` (genera una key de verdad).
+  // api_key_hash es un placeholder, no sirve para /api/ingest/*. Para una RPi real usa db:create-device.
   const [device] = await db
     .insert(devices)
     .values({

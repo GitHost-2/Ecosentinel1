@@ -1,11 +1,7 @@
 import { Resend } from "resend";
 
-// Necesitas una cuenta en resend.com y una API key en RESEND_API_KEY.
-// Para mandar a CUALQUIER correo de cliente (no solo al tuyo propio)
-// hace falta verificar un dominio propio en Resend — mientras no lo
-// hagas, el modo sandbox de Resend solo entrega al correo con el que te
-// registraste ahí. ALERT_FROM_EMAIL debe ser una dirección de ese
-// dominio verificado (ej. alertas@tudominio.com).
+// Requiere RESEND_API_KEY. En modo sandbox (sin dominio verificado en
+// Resend) solo entrega al correo de la cuenta registrada.
 const RESEND_API_KEY = process.env.RESEND_API_KEY;
 const ALERT_FROM_EMAIL = process.env.ALERT_FROM_EMAIL || "EcoSentinel <onboarding@resend.dev>";
 const DASHBOARD_URL = process.env.DASHBOARD_URL || "https://ecosentinel1.vercel.app/dashboard";

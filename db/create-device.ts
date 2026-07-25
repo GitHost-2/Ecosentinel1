@@ -1,18 +1,7 @@
 /**
- * Da de alta un dispositivo (Raspberry Pi) real y genera su API key.
- * La API key en texto plano SOLO se muestra una vez en la terminal —
- * cópiala a la RPi (variable de entorno o archivo de config) en ese
- * momento, porque la base de datos solo guarda su hash (HMAC), no se
- * puede recuperar después.
- *
- * Uso:
- *   npm run db:create-device -- --cliente "Nombre del cliente" --plan Pro --owner-email dueno@empresa.com
- *
- * --owner-email es opcional: liga el dispositivo a una cuenta de
- * `users` ya registrada, para que las alertas por ataque (ver
- * lib/alerts.ts) sepan a quién mandarle el correo. Sin este flag el
- * dispositivo queda sin dueño y no se manda ninguna alerta hasta que
- * se asigne uno (UPDATE devices SET owner_user_id = ... WHERE id = ...).
+ * Da de alta un dispositivo (RPi) y genera su API key (solo se muestra una vez, la BD guarda el hash).
+ * Uso: npm run db:create-device -- --cliente "Nombre" --plan Pro --owner-email dueno@empresa.com
+ * --owner-email es opcional; sin él el dispositivo queda sin dueño y sin alertas por correo.
  */
 import "dotenv/config";
 import { eq } from "drizzle-orm";

@@ -1,13 +1,6 @@
-/* ============================================================
-   EcoSentinel — dashboard.js
-   Panel de monitoreo con datos 100% reales de Postgres. La carga
-   inicial (contadores, alertas, gráfico de 24h, distribución de
-   amenazas) viene de /api/stats, /api/alerts, /api/hourly y
-   /api/threats. A partir de ahí, startLivePolling() vuelve a pedir esos
-   mismos endpoints cada pocos segundos: cuando la Raspberry Pi manda una
-   detección real a /api/ingest/detections, aparece aquí en el siguiente
-   ciclo de polling. Ya no hay ningún Math.random() generando datos.
-   ============================================================ */
+/* EcoSentinel — dashboard.js
+   Panel con datos reales de Postgres vía /api/stats, /api/alerts,
+   /api/hourly y /api/threats, refrescados por polling. */
 
 (function () {
   "use strict";
@@ -32,10 +25,7 @@
     });
   }
 
-  /* ---------- Overlay de proceso (validar / mitigar) ----------
-     Misma animación del loader raíz (index.html): escudo pulsante +
-     barra de progreso. Se reutiliza para simular la validación de
-     recomendaciones (~20s) y la mitigación de amenazas (~30s). */
+  /* ---------- Overlay de proceso (validar / mitigar) ---------- */
   const processOverlay = document.getElementById("processOverlay");
   const processTitle = document.getElementById("processTitle");
   const processBarFill = document.getElementById("processBarFill");
@@ -108,13 +98,7 @@
     });
   }
 
-  /* ---------- Filtro de dispositivo ----------
-     Cuando hay más de un cliente/RPi mandando datos, permite ver el
-     dashboard agregado ("Todos los dispositivos") o filtrado a uno solo.
-     La selección persiste en sessionStorage. El pill de estado refleja
-     heartbeats reales (device_heartbeats vía /api/devices), no un valor
-     fijo: "online" si el dispositivo relevante mandó un heartbeat hace
-     menos de ONLINE_THRESHOLD_MS (ver app/api/devices/route.ts). */
+  /* ---------- Filtro de dispositivo (persiste en sessionStorage) ---------- */
   const DEVICE_FILTER_KEY = "ecosentinel_device_filter";
   let currentDeviceId = "";
   try {
@@ -185,9 +169,7 @@
     });
   }
 
-  /* ---------- Perfil de conocimiento ----------
-     Ajusta el lenguaje y el nivel de detalle de las recomendaciones
-     según lo que la persona respondió en el cuestionario de registro. */
+  /* ---------- Perfil de conocimiento (ajusta las recomendaciones) ---------- */
   const PROFILES = {
     principiante: {
       label: "Principiante",
@@ -379,8 +361,7 @@
     });
   }
 
-  // Contadores: valores reales, cargados desde /api/stats (ver init() al
-  // final del archivo). Arrancan en 0 y se animan al llegar la respuesta.
+  // Cargados desde /api/stats en init(); arrancan en 0 y se animan al llegar la respuesta.
   let packets = 0;
   let detected = 0;
   let blocked = 0;
@@ -397,10 +378,7 @@
   const alertsBody = document.getElementById("alertsBody");
   const MAX_ROWS = 8;
 
-  // `a.ip` es en realidad el hash HMAC-SHA256 (64 hex) de la IP de
-  // origen — nunca la IP real (ver hashSourceIp() en lib/device-auth.ts).
-  // Se trunca para que la tabla se vea legible; el hash completo queda
-  // en el atributo title por si hace falta compararlo/copiarlo.
+  // `a.ip` es el hash de la IP (nunca la IP real); se trunca para la tabla, completo en el title.
   function truncatedHash(hash) {
     if (!hash || hash.length <= 12) return hash || "";
     return hash.slice(0, 10) + "…";
@@ -437,11 +415,6 @@
     }
   }
 
-  // Alertas iniciales: se cargan desde /api/alerts en init(). A partir de
-  // ahí, el "tiempo real" es polling contra la API real (ver
-  // startLivePolling), no simulación: cuando la Raspberry Pi manda una
-  // detección a /api/ingest/detections, aparece aquí unos segundos
-  // después, con datos reales de la base.
   const POLL_INTERVAL_MS = 6000;
   const HEAVY_POLL_EVERY = 5; // refresca hourly/threats cada N polls (~30s)
   const knownAlertIds = new Set();
@@ -495,10 +468,7 @@
     setInterval(pollStatsAndAlerts, POLL_INTERVAL_MS);
   }
 
-  /* ---------- Gráfico 24h (canvas nativo) ----------
-     Los datos (det/blk, 24 valores del más antiguo al más reciente) se
-     cargan una vez desde /api/hourly en init() y se guardan en
-     hourlyData para poder redibujar en cada resize sin volver a pedirlos. */
+  /* ---------- Gráfico 24h (canvas nativo) ---------- */
   let hourlyData = null;
 
   function drawChart() {
@@ -575,20 +545,12 @@
     });
   }
 
-  // drawChart() se invoca por primera vez desde init(), una vez que
-  // /api/hourly responde.
   window.addEventListener("resize", () => {
-    // redibujo estático al redimensionar
     const canvas = document.getElementById("dash-chart");
     if (canvas) drawChart();
   });
 
-  /* ---------- Amenazas: datos compartidos entre la dona y las
-     tarjetas de "Amenazas activas en tu red". Se cargan desde
-     /api/threats en init() (key, label, pct, color, tips ya vienen
-     armados desde el servidor). Mitigar una amenaza reduce su peso
-     aquí y redistribuye el resto, así ambas vistas se mantienen
-     consistentes (esto sigue siendo solo client-side, no persiste). */
+  /* ---------- Amenazas: datos compartidos entre la dona y las tarjetas ---------- */
   let THREATS = [];
   const mitigatedThreats = new Set();
 
@@ -645,19 +607,12 @@
     gsap.to(state, { p: 1, duration: 1.6, ease: "power2.out", onUpdate: () => render(state.p) });
   }
 
-  // drawDistribution() se invoca por primera vez desde init(), una vez
-  // que /api/threats responde.
   window.addEventListener("resize", () => {
     const canvas = document.getElementById("distChart");
     if (canvas) drawDistribution();
   });
 
-  /* ---------- Amenazas activas en tu red (tarjetas) ----------
-     Cada tarjeta refleja el peso (%) de THREATS sobre el total de
-     ataques detectados. "Tomar acciones" despliega recomendaciones
-     puntuales; "Mitigar" simula la aplicación de esas medidas en la
-     red (pantalla de carga ~30s) y baja los contadores globales de
-     forma creíble, sin llegar nunca a cero. */
+  /* ---------- Amenazas activas en tu red (tarjetas) ---------- */
   function tweenStatTo(el, from, to, duration) {
     if (!el) return;
     if (REDUCED) {
@@ -690,8 +645,7 @@
     const threat = THREATS.find((t) => t.key === key);
     if (!threat) return;
 
-    // Reducción creíble (55%–65%) atribuible a esta mitigación,
-    // nunca a cero ni a un número irrisorio.
+    // Reducción simulada (55%-65%), nunca a cero.
     const reduceFactor = 0.55 + Math.random() * 0.1;
     const newDetected = Math.max(180, Math.round(detected * (1 - reduceFactor)));
     const newBlocked = Math.max(150, Math.min(newDetected, Math.round(blocked * (1 - reduceFactor))));
@@ -701,8 +655,7 @@
     detected = newDetected;
     blocked = newBlocked;
 
-    // Se reduce el peso de esta amenaza en la distribución y se
-    // redistribuye lo liberado entre las demás para seguir sumando 100%.
+    // Redistribuye el % liberado entre las demás amenazas.
     const oldPct = threat.pct;
     threat.pct = Math.max(2, Math.round(oldPct * 0.25));
     const freed = oldPct - threat.pct;
@@ -782,13 +735,7 @@
     });
   }
 
-  // renderThreatCards() se invoca por primera vez desde init(), una vez
-  // que /api/threats responde.
-
-  /* ---------- Carga inicial desde la base de datos ----------
-     Sustituye la generación aleatoria anterior: cada bloque de la UI
-     pide sus datos reales a la API (Next.js + Drizzle + Postgres/Neon)
-     y luego usa exactamente las mismas funciones de render de siempre. */
+  /* ---------- Carga inicial desde la base de datos ---------- */
   async function loadDashboardData() {
     try {
       const stats = await fetch(withDeviceParam("/api/stats")).then((r) => r.json());
@@ -804,9 +751,7 @@
 
     try {
       const alerts = await fetch(withDeviceParam("/api/alerts?limit=" + MAX_ROWS)).then((r) => r.json());
-      // La API devuelve del más reciente al más antiguo; se recorre al
-      // revés para que addAlert() (que hace prepend) deje el más
-      // reciente arriba, igual que la semilla original.
+      // Se recorre al revés porque addAlert() hace prepend.
       alerts
         .slice()
         .reverse()

@@ -24,10 +24,7 @@ export async function GET(request: Request) {
     .from(detections)
     .where(sql`${detections.attackProb} >= ${BLOCK_THRESHOLD} and ${deviceCond}`);
 
-  // Paquetes analizados = suma de los deltas reales que reporta cada
-  // heartbeat de la RPi (packets_processed, contado desde el heartbeat
-  // anterior — ver app/api/ingest/heartbeat/route.ts). Ya no es una
-  // fórmula inventada; si no hay heartbeats todavía, es 0 honestamente.
+  // Suma de los deltas de packets_processed reportados por heartbeat; 0 si aún no hay heartbeats.
   const [{ packets }] = await db
     .select({ packets: sql<number>`coalesce(sum(${deviceHeartbeats.packetsProcessed}), 0)::bigint` })
     .from(deviceHeartbeats)
