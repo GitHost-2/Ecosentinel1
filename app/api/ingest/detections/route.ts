@@ -27,7 +27,11 @@ const VALID_PROTOCOLS = new Set(["TCP", "UDP", "ICMP", "OTHER"]);
  *   "attack_prob": 0.94,          // float 0-1, salida del modelo
  *   "attack_type": "Port Scanning", // una de las 6 familias soportadas
  *   "protocol": "TCP",            // capa de red: TCP/UDP/ICMP/...
- *   "src_ip": "192.168.1.57",     // IP real; el servidor la hashea (HMAC), nunca se guarda en texto plano
+ *   "src_ip": "a3f1c9d0e2b4d7f8",  // ya viene hasheada (HMAC-SHA256) desde la RPi con su
+ *                                  // .device_salt local (ver hash_ip() en inference_engine.py);
+ *                                  // la IP real nunca sale del dispositivo. El servidor vuelve
+ *                                  // a aplicar HMAC (INGEST_HMAC_SECRET, ver hashSourceIp()) como
+ *                                  // segunda capa antes de guardar en detections.src_ip_hash.
  *   "dst_port": 443,
  *   "timestamp": "2026-07-14T22:10:03Z" // opcional, default = ahora
  * }
