@@ -6,6 +6,8 @@ export const users = pgTable("users", {
   id: serial("id").primaryKey(),
   company: text("company").notNull(),
   email: text("email").notNull().unique(),
+  // Número de WhatsApp en formato E.164 (ej. +5215512345678). Nullable: sin él no se manda alerta por WhatsApp.
+  phone: text("phone"),
   passwordHash: text("password_hash").notNull(),
   plan: text("plan").notNull().default("Pro"),
   profile: text("profile").notNull().default("intermedio"),
@@ -44,17 +46,19 @@ export const detections = pgTable("detections", {
   index("detections_device_id_timestamp_idx").on(table.deviceId, table.timestamp),
 ]);
 
-// Registro de cada correo de alerta enviado (ver lib/alerts.ts: cooldown + auditoría).
+// Registro de cada alerta enviada por email o whatsapp (ver lib/alerts.ts: cooldown + auditoría).
+// El cooldown de 10 min es por dispositivo Y por canal (email y whatsapp corren independientes).
 export const alertLog = pgTable("alert_log", {
   id: serial("id").primaryKey(),
   deviceId: integer("device_id")
     .notNull()
     .references(() => devices.id, { onDelete: "cascade" }),
   detectionId: integer("detection_id").references(() => detections.id, { onDelete: "set null" }),
-  recipientEmail: text("recipient_email").notNull(),
+  channel: text("channel").notNull().default("email"), // 'email' | 'whatsapp'
+  recipient: text("recipient").notNull(), // email o número de whatsapp
   sentAt: timestamp("sent_at", { withTimezone: true }).notNull().defaultNow(),
 }, (table) => [
-  index("alert_log_device_id_sent_at_idx").on(table.deviceId, table.sentAt),
+  index("alert_log_device_id_channel_sent_at_idx").on(table.deviceId, table.channel, table.sentAt),
 ]);
 
 export const deviceHeartbeats = pgTable("device_heartbeats", {

@@ -325,13 +325,59 @@ UPDATE devices SET owner_user_id = (SELECT id FROM users WHERE email = 'dueno@em
 
 ### 3. Auditoría de alertas enviadas
 
-`alert_log` guarda cada correo que realmente se mandó (no los que se
-agruparon por el límite de frecuencia, ni los que fallaron):
+`alert_log` guarda cada alerta que realmente se mandó, por email o
+whatsapp (no las que se agruparon por el límite de frecuencia, ni las
+que fallaron):
 ```sql
-SELECT a.sent_at, d.nombre_cliente, a.recipient_email
+SELECT a.sent_at, a.channel, d.nombre_cliente, a.recipient
 FROM alert_log a JOIN devices d ON d.id = a.device_id
 ORDER BY a.sent_at DESC LIMIT 50;
 ```
+
+## Alertas por WhatsApp cuando hay un ataque
+
+Mismo mecanismo que el correo (mismo `maybeSendAttackAlert` en
+`lib/alerts.ts`, mismo cooldown de 10 min, pero contado por separado
+para cada canal): si el dueño del dispositivo tiene un `phone`
+registrado, además del correo se le manda un WhatsApp vía la API de
+Twilio (`lib/whatsapp.ts`).
+
+### 1. Crear la cuenta y el sandbox de WhatsApp (gratis)
+
+1. Crea una cuenta gratis en [twilio.com/try-twilio](https://www.twilio.com/try-twilio).
+2. En la consola, ve a **Messaging -> Try it out -> Send a WhatsApp message**
+   (o busca "WhatsApp sandbox" en el buscador de la consola).
+3. Ahí te dan un número de sandbox compartido (normalmente
+   `+1 415 523 8886`) y un código tipo `join <dos-palabras>`. Desde el
+   WhatsApp del número que quieras recibir alertas, mándale ese código
+   exacto a ese número — así "te unes" al sandbox y ya te puede
+   escribir.
+4. En **Account -> API keys & tokens** (o la página principal de la
+   consola) copia tu **Account SID** y tu **Auth Token** — son gratis,
+   no hace falta tarjeta para el sandbox.
+
+### 2. Variables de entorno nuevas
+
+En Vercel (**Settings -> Environment Variables**) y en tu `.env` local:
+```
+TWILIO_ACCOUNT_SID=<tu Account SID>
+TWILIO_AUTH_TOKEN=<tu Auth Token>
+TWILIO_WHATSAPP_FROM=whatsapp:+14155238886   # el número de sandbox que te dieron
+```
+
+### 3. Registrar el teléfono del dueño del dispositivo
+
+`users.phone` (nuevo, nullable) debe llevar el mismo número en formato
+E.164 que uniste al sandbox (ej. `+5215512345678`):
+```sql
+UPDATE users SET phone = '+5215512345678' WHERE email = 'dueno@empresa.com';
+```
+
+**Importante (límite del sandbox):** mientras no pases a un número de
+WhatsApp Business propio y aprobado por Meta, el sandbox solo entrega a
+los números que se unieron con el código `join ...` — no sirve todavía
+para mandarle WhatsApp a clientes reales, igual que Resend en modo
+sandbox solo te llega a ti mismo.
 
 ## Notas y decisiones a revisar
 
