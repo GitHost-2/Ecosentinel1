@@ -32,7 +32,7 @@ export async function sendAttackAlertEmail(params: {
   const { data, error } = await resend.emails.send({
     from: ALERT_FROM_EMAIL,
     to: params.to,
-    subject: `⚠️ EcoSentinel detectó ${params.attackType} en ${params.deviceName}`,
+    subject: `EcoSentinel detectó ${params.attackType} en ${params.deviceName}`,
     html: `
       <div style="font-family: -apple-system, sans-serif; max-width: 520px; margin: 0 auto; color:#1a1a1a;">
         <h2 style="color:#C4694A; margin-bottom:4px;">Ataque detectado: ${params.attackType}</h2>
