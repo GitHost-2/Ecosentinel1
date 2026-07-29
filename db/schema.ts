@@ -61,6 +61,23 @@ export const alertLog = pgTable("alert_log", {
   index("alert_log_device_id_channel_sent_at_idx").on(table.deviceId, table.channel, table.sentAt),
 ]);
 
+// Marca que un humano confirmó "Aislar IP" sobre una detección de alta
+// confianza (ver app/api/mitigate/route.ts). La RPi NUNCA bloquea nada
+// sola: esto solo registra la confirmación y sirve para no repetir la
+// guía dos veces sobre la misma detección.
+export const mitigations = pgTable("mitigations", {
+  id: serial("id").primaryKey(),
+  detectionId: integer("detection_id")
+    .notNull()
+    .references(() => detections.id, { onDelete: "cascade" }),
+  deviceId: integer("device_id")
+    .notNull()
+    .references(() => devices.id, { onDelete: "cascade" }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [
+  uniqueIndex("mitigations_detection_id_idx").on(table.detectionId),
+]);
+
 export const deviceHeartbeats = pgTable("device_heartbeats", {
   id: serial("id").primaryKey(),
   deviceId: integer("device_id")

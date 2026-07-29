@@ -1660,6 +1660,48 @@ section {
   background: rgba(47, 143, 134, 0.16);
   color: var(--teal-light);
 }
+.action-cell {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.isolate-btn {
+  padding: 6px 10px;
+  font-size: 0.78rem;
+  border-radius: 7px;
+}
+.isolate-btn:disabled {
+  cursor: default;
+  opacity: 0.75;
+}
+.isolate-cmd-label {
+  font-size: 0.85rem;
+  color: var(--gray);
+  margin-bottom: 8px;
+}
+.isolate-cmd {
+  background: var(--surface-2);
+  border: 1px solid var(--border-med);
+  border-radius: 8px;
+  padding: 12px 14px;
+  font-family: var(--font-mono, monospace);
+  font-size: 0.8rem;
+  color: var(--teal-light);
+  overflow-x: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+  margin-bottom: 20px;
+}
+.isolate-steps {
+  padding-left: 20px;
+  color: var(--text-1);
+  font-size: 0.92rem;
+  line-height: 1.6;
+}
+.isolate-steps li {
+  margin-bottom: 10px;
+}
 .prob-bar {
   display: flex;
   align-items: center;

@@ -386,9 +386,16 @@
 
   function rowHTML(a) {
     const pct = Math.round(a.prob * 100);
-    const action = a.blocked
+    const statusBadge = a.blocked
       ? '<span class="badge blocked">Bloqueado</span>'
       : '<span class="badge allowed">Permitido</span>';
+    // Solo se puede aislar lo que ya cuenta como bloqueado (alta confianza,
+    // prob >= 0.7) -- misma validación que exige app/api/mitigate/route.ts.
+    const isolateBtn = a.blocked
+      ? `<button class="btn btn-outline-dark isolate-btn" data-isolate="${a.id}"${a.mitigated ? " disabled" : ""}>${
+          a.mitigated ? "Aislado ✓" : "Aislar IP"
+        }</button>`
+      : "";
     return `
       <td>${fmtTime(a.time)}</td>
       <td><span class="ip" title="${a.ip}">${truncatedHash(a.ip)}</span></td>
@@ -399,7 +406,7 @@
           <span>${a.prob.toFixed(2)}</span>
         </div>
       </td>
-      <td>${action}</td>`;
+      <td class="action-cell">${statusBadge}${isolateBtn}</td>`;
   }
 
   function addAlert(a, animate) {
@@ -413,6 +420,32 @@
     if (animate && !REDUCED) {
       gsap.from(tr, { backgroundColor: "rgba(196,105,74,0.16)", opacity: 0, y: -8, duration: 0.5, ease: "power2.out" });
     }
+  }
+
+  if (alertsBody) {
+    alertsBody.addEventListener("click", async (e) => {
+      const btn = e.target.closest("[data-isolate]");
+      if (!btn || btn.disabled) return;
+      const detectionId = Number(btn.getAttribute("data-isolate"));
+      const originalText = btn.textContent;
+      btn.disabled = true;
+      btn.textContent = "Aislando…";
+      try {
+        const res = await fetch("/api/mitigate", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ detectionId }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.error || "No se pudo procesar la solicitud.");
+        btn.textContent = "Aislado ✓";
+        openIsolateModal(data.guidance);
+      } catch (err) {
+        btn.disabled = false;
+        btn.textContent = originalText;
+        window.alert("No se pudo aislar la IP: " + err.message);
+      }
+    });
   }
 
   const POLL_INTERVAL_MS = 6000;
@@ -439,7 +472,7 @@
       const fresh = alerts.filter((a) => !knownAlertIds.has(a.id)).reverse(); // más viejo primero
       fresh.forEach((a) => {
         knownAlertIds.add(a.id);
-        addAlert({ time: new Date(a.time), ip: a.ip, type: a.type, prob: a.prob, blocked: a.blocked }, true);
+        addAlert({ id: a.id, time: new Date(a.time), ip: a.ip, type: a.type, prob: a.prob, blocked: a.blocked, mitigated: a.mitigated }, true);
       });
     } catch (e) {
       console.error("No se pudo refrescar /api/alerts", e);
@@ -552,7 +585,6 @@
 
   /* ---------- Amenazas: datos compartidos entre la dona y las tarjetas ---------- */
   let THREATS = [];
-  const mitigatedThreats = new Set();
 
   /* ---------- Distribución de amenazas (dona animada) ---------- */
   function drawDistribution() {
@@ -641,46 +673,18 @@
     });
   }
 
-  function mitigateThreat(key) {
-    const threat = THREATS.find((t) => t.key === key);
-    if (!threat) return;
-
-    // Reducción simulada (55%-65%), nunca a cero.
-    const reduceFactor = 0.55 + Math.random() * 0.1;
-    const newDetected = Math.max(180, Math.round(detected * (1 - reduceFactor)));
-    const newBlocked = Math.max(150, Math.min(newDetected, Math.round(blocked * (1 - reduceFactor))));
-
-    tweenStatTo(elDetected, detected, newDetected, 1.6);
-    tweenStatTo(elBlocked, blocked, newBlocked, 1.6);
-    detected = newDetected;
-    blocked = newBlocked;
-
-    // Redistribuye el % liberado entre las demás amenazas.
-    const oldPct = threat.pct;
-    threat.pct = Math.max(2, Math.round(oldPct * 0.25));
-    const freed = oldPct - threat.pct;
-    const others = THREATS.filter((t) => t.key !== key);
-    const othersTotal = others.reduce((s, t) => s + t.pct, 0) || 1;
-    others.forEach((t) => {
-      t.pct = Math.max(2, Math.round(t.pct + freed * (t.pct / othersTotal)));
-    });
-    const sum = THREATS.reduce((s, t) => s + t.pct, 0);
-    threat.pct += 100 - sum;
-
-    mitigatedThreats.add(key);
-    drawDistribution();
-    renderThreatCards();
-  }
-
+  // El botón "Mitigar" que reducía los contadores con Math.random() se quitó:
+  // era puramente cosmético, no tocaba nada real. La acción real de aislar
+  // una IP vive ahora en la tabla de alertas (ver btn-isolate más abajo),
+  // sobre una detección específica, no sobre una categoría agregada.
   function renderThreatCards() {
     const grid = document.getElementById("threatsGrid");
     if (!grid) return;
 
     grid.innerHTML = THREATS.map((t) => {
       const count = Math.max(1, Math.round((detected * t.pct) / 100));
-      const isMitigated = mitigatedThreats.has(t.key);
       return `
-        <div class="threat-mini-card${isMitigated ? " mitigated" : ""}" data-threat="${t.key}">
+        <div class="threat-mini-card" data-threat="${t.key}">
           <div class="tmc-head">
             <span class="tmc-dot" style="background:${t.color}"></span>
             <span class="tmc-name">${t.label}</span>
@@ -689,18 +693,13 @@
           <ul class="tmc-tips" hidden>${t.tips.map((tip) => `<li>${tip}</li>`).join("")}</ul>
           <div class="tmc-actions">
             <button class="btn btn-outline-dark tmc-action" data-action="review">Tomar acciones</button>
-            <button class="btn btn-teal tmc-action" data-action="mitigate"${isMitigated ? " disabled" : ""}>${
-        isMitigated ? "Mitigado ✓" : "Mitigar"
-      }</button>
           </div>
         </div>`;
     }).join("");
 
     grid.querySelectorAll(".threat-mini-card").forEach((card) => {
-      const key = card.getAttribute("data-threat");
       const tips = card.querySelector(".tmc-tips");
       const reviewBtn = card.querySelector('[data-action="review"]');
-      const mitigateBtn = card.querySelector('[data-action="mitigate"]');
       let expanded = false;
 
       reviewBtn.addEventListener("click", () => {
@@ -714,26 +713,41 @@
           reviewBtn.textContent = "Tomar acciones";
         }
       });
-
-      mitigateBtn.addEventListener("click", () => {
-        if (mitigateBtn.disabled) return;
-        mitigateBtn.disabled = true;
-        reviewBtn.disabled = true;
-        const threatLabel = THREATS.find((t) => t.key === key).label;
-        runProcess({
-          title: `Mitigando amenaza: ${threatLabel}`,
-          duration: 30,
-          messages: [
-            "Aplicando reglas de contención…",
-            "Aislando el tráfico malicioso…",
-            "Actualizando el motor de inferencia…",
-            "Verificando la reducción de incidentes…",
-          ],
-          onComplete: () => mitigateThreat(key),
-        });
-      });
     });
   }
+
+  /* ---------- Aislar IP: acción real sobre una detección de alta confianza ----------
+     Nunca toca la red sola (la RPi es cliente WiFi, no está en línea en la
+     red -- no puede bloquear tráfico ajeno). Confirma en el backend
+     (POST /api/mitigate, exige prob >= 0.7) y muestra la guía para
+     bloquear la IP real donde sí se puede: el router del cliente. */
+  const isolateOverlay = document.getElementById("isolateOverlay");
+  const isolateCmd = document.getElementById("isolateCmd");
+  const isolateSteps = document.getElementById("isolateSteps");
+
+  function openIsolateModal(guidance) {
+    if (!isolateOverlay) return;
+    if (isolateCmd) isolateCmd.textContent = guidance.findRealIpCommand;
+    if (isolateSteps) isolateSteps.innerHTML = guidance.steps.map((s) => `<li>${s}</li>`).join("");
+    isolateOverlay.classList.add("open");
+    document.body.style.overflow = "hidden";
+  }
+
+  function closeIsolateModal() {
+    if (!isolateOverlay) return;
+    isolateOverlay.classList.remove("open");
+    document.body.style.overflow = "";
+  }
+
+  document.querySelectorAll("[data-close-isolate]").forEach((btn) => btn.addEventListener("click", closeIsolateModal));
+  if (isolateOverlay) {
+    isolateOverlay.addEventListener("click", (e) => {
+      if (e.target === isolateOverlay) closeIsolateModal();
+    });
+  }
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") closeIsolateModal();
+  });
 
   /* ---------- Carga inicial desde la base de datos ---------- */
   async function loadDashboardData() {
@@ -757,7 +771,7 @@
         .reverse()
         .forEach((a) => {
           knownAlertIds.add(a.id);
-          addAlert({ time: new Date(a.time), ip: a.ip, type: a.type, prob: a.prob, blocked: a.blocked }, false);
+          addAlert({ id: a.id, time: new Date(a.time), ip: a.ip, type: a.type, prob: a.prob, blocked: a.blocked, mitigated: a.mitigated }, false);
         });
     } catch (e) {
       console.error("No se pudo cargar /api/alerts", e);

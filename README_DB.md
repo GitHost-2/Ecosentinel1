@@ -379,6 +379,26 @@ los números que se unieron con el código `join ...` — no sirve todavía
 para mandarle WhatsApp a clientes reales, igual que Resend en modo
 sandbox solo te llega a ti mismo.
 
+## Aislar IP: acción real, no cosmética
+
+El botón "Aislar IP" en la tabla de alertas (solo visible en detecciones
+de alta confianza, prob >= 0.7) llama a `POST /api/mitigate` con el
+`detectionId`. Esto **nunca toca la red por sí solo** -- la Raspberry Pi
+es un cliente WiFi sin Ethernet, no está "en línea" en la red, así que
+no tiene forma de bloquear tráfico de otro dispositivo. La ruta solo:
+
+1. Valida que la detección exista y tenga `attack_prob >= 0.7` (si no,
+   rechaza con 400 -- nunca se sugiere aislar algo de baja confianza).
+2. Registra la confirmación en `mitigations` (idempotente: aislar dos
+   veces la misma detección no genera dos filas).
+3. Devuelve una guía: el comando exacto para ver la IP real en el log
+   local de la RPi por SSH (la IP real nunca llegó a esta base de
+   datos, solo su hash) + los pasos genéricos para bloquearla en el
+   router del cliente.
+
+Requiere correr la migración `drizzle/0006_big_tony_stark.sql` (tabla
+`mitigations` nueva) antes de usarse.
+
 ## Notas y decisiones a revisar
 
 - **`attack_type`**: se agregó a `detections` aunque no estaba en el
