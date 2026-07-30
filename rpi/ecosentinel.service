@@ -1,0 +1,19 @@
+[Unit]
+Description=EcoSentinel - motor de inferencia IDS (edge, RPi 3A+)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=rpi
+Group=rpi
+WorkingDirectory=/home/rpi/ecosentinel
+EnvironmentFile=/home/rpi/ecosentinel/.env.ecosentinel
+ExecStart=/home/rpi/ecosentinel/.venv/bin/python3 /home/rpi/ecosentinel/inference_engine.py --live wlan0 --trusted-ips 192.168.1.75
+Restart=on-failure
+RestartSec=5
+MemoryHigh=250M
+MemoryMax=350M
+
+[Install]
+WantedBy=multi-user.target
