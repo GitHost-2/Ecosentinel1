@@ -426,6 +426,116 @@ def distinct_recent_ports(src):
     return len({p for _, p in dq})
 
 
+# ──────────────────────────────────────────────────────────────
+# Deteccion de barridos ARP (reconocimiento de red)
+# ──────────────────────────────────────────────────────────────
+# POR QUE HACE FALTA: este sensor es un cliente WiFi en modo managed, asi
+# que solo ve el trafico dirigido a el mismo mas el broadcast. Un escaneo
+# de puertos contra OTRO equipo de la red le pasa desapercibido.
+#
+# Pero la fase de reconocimiento -- el "nmap -sn" con el que un atacante
+# empieza para descubrir que hay en la red -- usa ARP, y ARP ES broadcast:
+# le llega a todos. Contando cuantas direcciones DISTINTAS pregunta cada
+# origen se detecta el barrido aunque no vaya dirigido a nosotros.
+#
+# Medido el 2026-07-30: un `nmap -sn 192.168.1.0/24` lanzado desde otro
+# equipo genero 198 ARP requests perfectamente visibles desde la RPi.
+#
+# Esto NO pasa por el modelo: el RandomForest se entreno con flujos IP de
+# CIC-IoT2023 y no tiene features para ARP. Es una heuristica determinista.
+ARP_SCAN_WINDOW = 60.0       # ventana deslizante, en segundos
+ARP_SCAN_THRESHOLD = 20      # direcciones distintas preguntadas -> barrido
+ARP_ALERT_COOLDOWN = 300.0   # no repetir alerta del mismo origen en 5 min
+ARP_MAX_SOURCES = 500        # tope de origenes vigilados (proteccion de RAM)
+
+# src_ip -> {"targets": {ip_preguntada: timestamp}, "last_alert": ts}
+_arp_activity = {}
+
+
+def track_arp_request(src_ip, target_ip, now, trusted_ips=None):
+    """
+    Registra un ARP request y devuelve el numero de objetivos distintos si
+    acaba de cruzarse el umbral de barrido; None en cualquier otro caso.
+
+    Es puro salvo por el diccionario de estado, para poder probarlo sin red.
+    """
+    # Exclusion de origenes de gestion, con la MISMA logica que should_exclude():
+    # no basta el match exacto de --trusted-ips. El gateway/router hace ARP
+    # legitimo hacia muchos hosts de la red (mantiene su tabla ARP) y dispararia
+    # un falso "barrido". Ademas de la laptop de admin (match exacto), se excluye
+    # cualquier origen dentro de un prefijo ya excluido -- in_excluded_network()
+    # cubre el gateway y el resto de infraestructura de confianza.
+    if trusted_ips and src_ip in trusted_ips:
+        return None
+    if in_excluded_network(src_ip):
+        return None
+
+    act = _arp_activity.get(src_ip)
+    if act is None:
+        # Si hay demasiados origenes vigilados se limpian los inactivos. Sin
+        # esto, una red ruidosa haria crecer el diccionario indefinidamente
+        # (mismo problema que ya tenia _recent_ports_by_src).
+        if len(_arp_activity) >= ARP_MAX_SOURCES:
+            for ip in [k for k, v in _arp_activity.items()
+                       if not v["targets"] or max(v["targets"].values()) < now - ARP_SCAN_WINDOW]:
+                del _arp_activity[ip]
+            if len(_arp_activity) >= ARP_MAX_SOURCES:
+                _arp_activity.clear()
+        act = {"targets": {}, "last_alert": 0.0}
+        _arp_activity[src_ip] = act
+
+    act["targets"][target_ip] = now
+    limite = now - ARP_SCAN_WINDOW
+    act["targets"] = {ip: ts for ip, ts in act["targets"].items() if ts >= limite}
+
+    n = len(act["targets"])
+    if n >= ARP_SCAN_THRESHOLD and (now - act["last_alert"]) >= ARP_ALERT_COOLDOWN:
+        act["last_alert"] = now
+        return n
+    return None
+
+
+def send_arp_scan_detection(src_ip, n_targets):
+    # attack_prob aqui es una CERTEZA HEURISTICA, no una salida del modelo:
+    # preguntar por >=20 direcciones distintas en 60 s no tiene lectura
+    # benigna en una red domestica o de PyME. Se manda 0.99 para que quede
+    # por encima del umbral de "alta confianza" del dashboard (0.70).
+    # attack_type: de los 6 valores que acepta la API, "Port Scanning" es el
+    # unico que describe reconocimiento.
+    # protocol "OTHER": ARP no es TCP/UDP/ICMP.
+    enqueue_send("/api/ingest/detections", {
+        "attack_prob": 0.99,
+        "attack_type": "Port Scanning",
+        "protocol": "OTHER",
+        "src_ip": hash_ip(src_ip),   # HMAC-SHA256 local, nunca la IP en claro
+        "dst_port": 0,               # un barrido ARP no tiene puerto destino
+    })
+
+
+def check_arp_scan(pkt, trusted_ips=None):
+    """Mira un paquete en crudo; si es un ARP request, lo contabiliza."""
+    try:
+        from scapy.all import ARP
+    except ImportError:
+        return
+    if ARP not in pkt:
+        return
+    arp = pkt[ARP]
+    if getattr(arp, "op", None) != 1:   # 1 = who-has (request). Las replies no interesan.
+        return
+    src, target = getattr(arp, "psrc", ""), getattr(arp, "pdst", "")
+    # 0.0.0.0 son ARP probes de un equipo pidiendo IP (DHCP): no es un barrido.
+    if not src or not target or src == "0.0.0.0":
+        return
+    n = track_arp_request(src, target, time.time(), trusted_ips)
+    if n:
+        log.warning(
+            f"  [BARRIDO ARP] {src} pregunto por {n} direcciones distintas "
+            f"en menos de {ARP_SCAN_WINDOW:.0f}s -- reconocimiento de red"
+        )
+        send_arp_scan_detection(src, n)
+
+
 MIRAI_PORTS = {23, 2323}
 RANSOMWARE_LATERAL_PORTS = {445, 3389}
 BRUTEFORCE_PORTS = {21, 22, 3389}
@@ -904,6 +1014,11 @@ def run_live(interface, model, threshold, scaler, features, debug=False, trusted
     FLUSH_EVERY_N_PACKETS = 50  # chequeo de expiracion, independiente de cuantos flujos haya abiertos
 
     def on_packet(pkt):
+        # ARP primero: parse_packet() descarta todo lo que no lleva capa IP,
+        # y el barrido de reconocimiento viaja justo por ahi. Sin esta linea
+        # el sensor no ve al atacante hasta que le apunta directamente.
+        check_arp_scan(pkt, trusted_ips)
+
         info = parse_packet(pkt)
         if info and should_exclude(info, trusted_ips):
             excluded_counter["n"] += 1

@@ -57,6 +57,47 @@ versiona**): `ECOSENTINEL_API_URL`, `ECOSENTINEL_API_KEY`.
 | Multicast (`224.0.0.0/4`) y broadcast | Descubrimiento normal (mDNS, SSDP). Es seguro: un ataque de reflexión real apunta a la IP unicast de la víctima, nunca al grupo multicast. |
 | Broadcast de subred (`192.168.1.255`) | Tráfico normal de LAN (NetBIOS, SMB, DHCP). Antes solo se excluía `255.255.255.255`. |
 
+## Detección de barridos ARP (reconocimiento de red)
+
+Este sensor es un cliente WiFi en modo *managed*: solo ve el tráfico dirigido a
+él mismo más el broadcast. Un escaneo de puertos contra **otro** equipo de la red
+le pasa desapercibido. Pero la fase de **reconocimiento** — el `nmap -sn` con el
+que un atacante empieza para descubrir qué hay en la red — usa **ARP**, y ARP es
+broadcast: le llega a todos. Contando cuántas direcciones **distintas** pregunta
+cada origen se detecta el barrido aunque no vaya dirigido a nosotros.
+
+> Medido el 2026-07-30: un `nmap -sn 192.168.1.0/24` desde otro equipo generó
+> ~198 ARP requests perfectamente visibles desde la RPi.
+
+Esto **no pasa por el modelo**: el RandomForest se entrenó con flujos IP de
+CIC-IoT2023 y no tiene features para ARP. Es una **heurística determinista**.
+
+Tres funciones nuevas en `inference_engine.py`:
+
+| Función | Qué hace |
+|---|---|
+| `check_arp_scan(pkt, trusted_ips)` | Se llama por cada paquete **antes** de `parse_packet()` (que descarta lo que no lleva capa IP, justo por donde viaja el barrido). Si es un ARP *request* (`op==1`, who-has) con `psrc`/`pdst` válidos, lo contabiliza. Ignora `psrc=0.0.0.0` (ARP probes de DHCP, no un barrido). |
+| `track_arp_request(src, target, now, trusted_ips)` | Núcleo, **puro salvo por un diccionario de estado** (por eso es testeable sin red). Mantiene por origen los objetivos distintos en una **ventana deslizante de 60 s** (`ARP_SCAN_WINDOW`). Devuelve el nº de objetivos si acaba de cruzar el umbral de **20** (`ARP_SCAN_THRESHOLD`); `None` en cualquier otro caso. |
+| `send_arp_scan_detection(src, n)` | Encola la detección a `/api/ingest/detections` con la **IP hasheada** (`hash_ip`, nunca en claro), `attack_type="Port Scanning"`, `protocol="OTHER"` (ARP no es TCP/UDP/ICMP) y `attack_prob=0.99` (certeza heurística, no salida del modelo: preguntar por ≥20 direcciones distintas en 60 s no tiene lectura benigna en una red de PyME). |
+
+Salvaguardas:
+
+- **Cooldown de 5 min** (`ARP_ALERT_COOLDOWN`): un mismo origen no realerta hasta
+  pasada la ventana, aunque siga barriendo.
+- **Tope de 500 orígenes vigilados** (`ARP_MAX_SOURCES`): al alcanzarlo se purgan
+  los inactivos y, en el peor caso, se limpia el diccionario — evita que una red
+  ruidosa haga crecer la memoria sin límite.
+- **Exclusión coherente con `should_exclude()`**: no basta el match exacto de
+  `--trusted-ips`. El **gateway/router** hace ARP legítimo hacia muchos hosts
+  (mantiene su tabla ARP) y dispararía un falso barrido, así que se excluye tanto
+  la IP de admin (match exacto) como cualquier origen dentro de un prefijo ya
+  excluido, vía `in_excluded_network()`. **No** se excluye la /24 local completa:
+  eso dejaría fuera al propio atacante y anularía la detección.
+
+Prueba: `tests/test_arp_detection.py` (7 casos, biblioteca estándar). Corre con
+`python3 -m unittest tests/test_arp_detection.py`. **No** entra en `npm test`
+(ese runner solo toma `tests/*.test.ts`); es código Python que corre en la RPi.
+
 ## Fixes aplicados (2026-07-28/29)
 
 1. `hash_ip()` — HMAC-SHA256 de la IP con `.device_salt` local. Un `sha256(ip)`
