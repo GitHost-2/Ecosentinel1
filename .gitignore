@@ -19,3 +19,13 @@ node_modules
 
 # Cache incremental de tsc (npx tsc --noEmit): artefacto local, no versionar.
 tsconfig.tsbuildinfo
+
+# Motor de la RPi (rpi/): secreto HMAC y artefactos de Python.
+# .device_salt son 32 bytes: la clave del hashing HMAC-SHA256 de las IPs.
+# Publicarla en este repo PÚBLICO rompería el pilar de privacidad de forma
+# irreversible (permitiría revertir los hashes de IP). NUNCA versionar.
+rpi/.device_salt
+
+# Artefactos de Python en cualquier ubicacion (rpi/, tests/…).
+__pycache__/
+*.pyc
