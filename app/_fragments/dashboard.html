@@ -66,7 +66,11 @@
               </span>
             </div>
             <div class="stat-value" id="statBlocked">0</div>
-            <div class="stat-trend">Umbral calibrado en 0.10</div>
+            <!-- 0.70 = BLOCK_THRESHOLD, el criterio real de "bloqueado" (alta
+                 confianza) que usan /api/stats, /api/alerts y /api/hourly. Antes
+                 decía 0.10, que era el umbral viejo del .pkl y ya no se usa: el
+                 motor detecta con un piso de 0.95. -->
+            <div class="stat-trend">Alta confianza: umbral 0.70</div>
           </div>
 
           <div class="stat-card">
