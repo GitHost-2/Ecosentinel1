@@ -3,6 +3,14 @@ import { db } from "@/db";
 import { detections } from "@/db/schema";
 import { authenticateDevice, hashSourceIp } from "@/lib/device-auth";
 import { maybeSendAttackAlert } from "@/lib/alerts";
+import {
+  LIMITS,
+  checkRateLimitSafe,
+  clientIp,
+  purgeExpiredCounters,
+  shouldPurge,
+  tooManyRequests,
+} from "@/lib/rate-limit";
 
 export const dynamic = "force-dynamic";
 
@@ -34,6 +42,17 @@ const VALID_PROTOCOLS = new Set(["TCP", "UDP", "ICMP", "OTHER"]);
  * }
  */
 export async function POST(request: Request) {
+  // Cubo por IP ANTES de autenticar: cada intento con una key inválida cuesta
+  // una query a la base, así que sin este freno se puede golpear la base sin
+  // credenciales válidas. Deliberadamente holgado (la RPi legítima jamás lo
+  // alcanza) — el freno fino va por dispositivo, más abajo.
+  const ip = clientIp(request);
+  const byIp = await checkRateLimitSafe({ key: `ingest:ip:${ip}`, ...LIMITS.ingestPerIp });
+  if (!byIp.allowed) {
+    console.warn(`[ingest/detections] rate limit por IP alcanzado. ip=${ip} peticiones=${byIp.count}`);
+    return tooManyRequests("Demasiadas peticiones.", byIp.retryAfterSeconds);
+  }
+
   let deviceId: number | null;
   try {
     deviceId = await authenticateDevice(request);
@@ -44,6 +63,24 @@ export async function POST(request: Request) {
   if (!deviceId) {
     console.error("[ingest/detections] API key inválida o ausente. authHeader presente:", request.headers.has("authorization"));
     return NextResponse.json({ error: "API key inválida o ausente." }, { status: 401 });
+  }
+
+  // Cubo por dispositivo: si una API key se filtra, esto acota cuántas filas
+  // puede meter en la base. Ver LIMITS.ingestPerDevice para por qué el número
+  // es alto (un port scan real produce ~500 detecciones en 2 segundos).
+  const byDevice = await checkRateLimitSafe({
+    key: `ingest:device:${deviceId}`,
+    ...LIMITS.ingestPerDevice,
+  });
+  if (!byDevice.allowed) {
+    console.warn(
+      `[ingest/detections] rate limit por dispositivo alcanzado. deviceId=${deviceId} peticiones=${byDevice.count}`,
+    );
+    return tooManyRequests("Demasiadas detecciones en el último minuto.", byDevice.retryAfterSeconds);
+  }
+
+  if (shouldPurge()) {
+    after(() => purgeExpiredCounters());
   }
 
   const body = await request.json().catch(() => null);

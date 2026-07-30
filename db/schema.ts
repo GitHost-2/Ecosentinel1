@@ -1,4 +1,4 @@
-import { pgTable, serial, text, timestamp, integer, real, index, uniqueIndex } from "drizzle-orm/pg-core";
+import { pgTable, serial, text, timestamp, integer, real, index, uniqueIndex, primaryKey } from "drizzle-orm/pg-core";
 
 // Cuentas del landing (empresa, correo, plan, perfil de conocimiento).
 // Separada de `devices`: aquí vive la persona, allá el appliance físico.
@@ -76,6 +76,22 @@ export const mitigations = pgTable("mitigations", {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 }, (table) => [
   uniqueIndex("mitigations_detection_id_idx").on(table.detectionId),
+]);
+
+// Contadores de rate limiting (ver lib/rate-limit.ts). Una fila por
+// (identificador, ventana): el login se limita por IP y por correo, la ingesta
+// por dispositivo. Vive en la base porque en Vercel cada invocación puede
+// correr en otro proceso, así que un contador en memoria no limitaría nada.
+// Las filas de ventanas vencidas ya no se leen; se purgan desde la propia
+// ruta de forma probabilística para no depender de un cron.
+export const rateLimitCounters = pgTable("rate_limit_counters", {
+  bucketKey: text("bucket_key").notNull(),
+  windowStart: timestamp("window_start", { withTimezone: true }).notNull(),
+  count: integer("count").notNull().default(0),
+}, (table) => [
+  primaryKey({ columns: [table.bucketKey, table.windowStart] }),
+  // Para el DELETE de purga por ventana vencida.
+  index("rate_limit_counters_window_start_idx").on(table.windowStart),
 ]);
 
 export const deviceHeartbeats = pgTable("device_heartbeats", {

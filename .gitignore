@@ -16,3 +16,6 @@ node_modules
 .DS_Store
 .vercel
 .env*
+
+# Cache incremental de tsc (npx tsc --noEmit): artefacto local, no versionar.
+tsconfig.tsbuildinfo

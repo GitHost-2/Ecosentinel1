@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { db } from "@/db";
 import { deviceHeartbeats } from "@/db/schema";
 import { authenticateDevice } from "@/lib/device-auth";
+import { LIMITS, checkRateLimitSafe, clientIp, tooManyRequests } from "@/lib/rate-limit";
 
 export const dynamic = "force-dynamic";
 
@@ -20,6 +21,13 @@ export const dynamic = "force-dynamic";
  * }
  */
 export async function POST(request: Request) {
+  const ip = clientIp(request);
+  const byIp = await checkRateLimitSafe({ key: `ingest:ip:${ip}`, ...LIMITS.ingestPerIp });
+  if (!byIp.allowed) {
+    console.warn(`[ingest/heartbeat] rate limit por IP alcanzado. ip=${ip} peticiones=${byIp.count}`);
+    return tooManyRequests("Demasiadas peticiones.", byIp.retryAfterSeconds);
+  }
+
   let deviceId: number | null;
   try {
     deviceId = await authenticateDevice(request);
@@ -30,6 +38,19 @@ export async function POST(request: Request) {
   if (!deviceId) {
     console.error("[ingest/heartbeat] API key inválida o ausente. authHeader presente:", request.headers.has("authorization"));
     return NextResponse.json({ error: "API key inválida o ausente." }, { status: 401 });
+  }
+
+  // La RPi manda ~2 heartbeats/min; el límite existe solo para que una key
+  // filtrada no pueda inflar la tabla de salud del dispositivo.
+  const byDevice = await checkRateLimitSafe({
+    key: `heartbeat:device:${deviceId}`,
+    ...LIMITS.heartbeatPerDevice,
+  });
+  if (!byDevice.allowed) {
+    console.warn(
+      `[ingest/heartbeat] rate limit por dispositivo alcanzado. deviceId=${deviceId} peticiones=${byDevice.count}`,
+    );
+    return tooManyRequests("Demasiados heartbeats en el último minuto.", byDevice.retryAfterSeconds);
   }
 
   const body = await request.json().catch(() => null);

@@ -7,12 +7,18 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
+    "test": "node --import tsx --test tests/*.test.ts",
     "db:generate": "drizzle-kit generate",
     "db:push": "drizzle-kit push",
     "db:migrate": "drizzle-kit migrate",
     "db:studio": "drizzle-kit studio",
     "db:seed": "tsx db/seed.ts",
     "db:create-device": "tsx db/create-device.ts"
+  },
+  "//overrides": "postcss y sharp entran como dependencias transitivas de next, que las fija en versiones con CVEs (postcss <=8.5.17: XSS y lectura arbitraria de archivos vía sourceMappingURL; sharp <0.35.0: CVEs heredados de libvips). next@15.5.22 ya es la última de su línea, así que no hay actualización que lo resuelva, y `npm audit fix --force` propone DEGRADAR next a 9.3.3 (rompería el App Router entero). Estos overrides fuerzan las versiones parcheadas. sharp es de bajo riesgo aquí porque el proyecto no usa next/image.",
+  "overrides": {
+    "postcss": "^8.5.25",
+    "sharp": "^0.35.3"
   },
   "dependencies": {
     "@neondatabase/serverless": "^0.10.4",
