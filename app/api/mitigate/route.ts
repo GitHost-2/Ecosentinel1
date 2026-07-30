@@ -11,6 +11,12 @@ export const dynamic = "force-dynamic";
 // confianza: es justo el escenario que más falsos positivos daría.
 const BLOCK_THRESHOLD = 0.7;
 
+// `detections.id` es `serial`, o sea int4. Un id mayor no cabe en la columna:
+// Postgres aborta la consulta ("value out of range for type integer") y la
+// ruta respondía 500 en vez de 400. Se validaba `> 0` pero no el techo, así
+// que bastaba mandar `{"detectionId": 2147483648}` para provocar el error.
+const MAX_DETECTION_ID = 2_147_483_647;
+
 /**
  * Confirma "Aislar IP" sobre una detección de alta confianza.
  *
@@ -32,7 +38,7 @@ export async function POST(request: Request) {
 
   const body = await request.json().catch(() => null);
   const detectionId = Number(body?.detectionId);
-  if (!Number.isInteger(detectionId) || detectionId <= 0) {
+  if (!Number.isInteger(detectionId) || detectionId <= 0 || detectionId > MAX_DETECTION_ID) {
     return NextResponse.json({ error: "detectionId inválido." }, { status: 400 });
   }
 

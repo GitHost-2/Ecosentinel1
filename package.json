@@ -29,13 +29,16 @@
     "react-dom": "^19.0.0",
     "resend": "^6.17.2"
   },
+  "//pg": "SOLO para pruebas (devDependency, no entra en el bundle de Vercel). En producción se usa @neondatabase/serverless por HTTP; un Postgres local no habla ese protocolo, así que tests/db-local.ts sustituye el transporte del driver de Neon por `pg` para correr las rutas REALES contra la base local (ver tests/mitigate.test.ts).",
   "devDependencies": {
     "@types/bcryptjs": "^2.4.6",
     "@types/node": "^22.10.2",
+    "@types/pg": "^8.20.0",
     "@types/react": "^19.0.2",
     "@types/react-dom": "^19.0.2",
     "dotenv": "^16.4.7",
     "drizzle-kit": "^0.28.1",
+    "pg": "^8.22.0",
     "tsx": "^4.19.2",
     "typescript": "^5.7.2"
   }
