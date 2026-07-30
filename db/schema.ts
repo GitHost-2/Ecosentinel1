@@ -56,6 +56,14 @@ export const alertLog = pgTable("alert_log", {
   detectionId: integer("detection_id").references(() => detections.id, { onDelete: "set null" }),
   channel: text("channel").notNull().default("email"), // 'email' | 'whatsapp'
   recipient: text("recipient").notNull(), // email o número de whatsapp
+  // 'sent' = entregado al proveedor | 'failed' = el proveedor lo rechazó.
+  // Antes solo se guardaba fila cuando el envío tenía ÉXITO, así que un canal
+  // averiado no dejaba rastro y el cooldown no lo frenaba: se reintentaba en
+  // CADA detección (se observó el 2026-07-30: 91 llamadas fallidas a Resend en
+  // segundos). Ahora se registra también el fallo, con su propia ventana.
+  // Default 'sent' para que las filas anteriores a esta columna sigan valiendo.
+  status: text("status").notNull().default("sent"), // 'sent' | 'failed'
+  // Momento del INTENTO (haya salido bien o mal), no solo del envío logrado.
   sentAt: timestamp("sent_at", { withTimezone: true }).notNull().defaultNow(),
 }, (table) => [
   index("alert_log_device_id_channel_sent_at_idx").on(table.deviceId, table.channel, table.sentAt),
