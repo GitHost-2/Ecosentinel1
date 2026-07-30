@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
-import { desc, eq } from "drizzle-orm";
+import { desc, eq, inArray } from "drizzle-orm";
 import { db } from "@/db";
 import { detections, mitigations } from "@/db/schema";
-import { parseDeviceIdParam } from "@/lib/device-filter";
+import { resolveVisibleDevices } from "@/lib/device-filter";
 
 export const dynamic = "force-dynamic";
 
@@ -11,15 +11,18 @@ const BLOCK_THRESHOLD = 0.7;
 const DEFAULT_LIMIT = 8;
 
 export async function GET(request: Request) {
+  const scope = await resolveVisibleDevices(request);
+  if (!scope.ok) return NextResponse.json({ error: "No autorizado." }, { status: scope.status });
+  if (scope.deviceIds.length === 0) return NextResponse.json([]);
+
   const { searchParams } = new URL(request.url);
   const limit = Math.min(Number(searchParams.get("limit")) || DEFAULT_LIMIT, 50);
-  const deviceId = parseDeviceIdParam(request);
 
-  const baseQuery = db
+  const rows = await db
     .select({ detection: detections, mitigatedAt: mitigations.createdAt })
     .from(detections)
-    .leftJoin(mitigations, eq(mitigations.detectionId, detections.id));
-  const rows = await (deviceId ? baseQuery.where(eq(detections.deviceId, deviceId)) : baseQuery)
+    .leftJoin(mitigations, eq(mitigations.detectionId, detections.id))
+    .where(inArray(detections.deviceId, scope.deviceIds))
     .orderBy(desc(detections.timestamp))
     .limit(limit);
 

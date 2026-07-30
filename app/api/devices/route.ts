@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { sql } from "drizzle-orm";
 import { db } from "@/db";
+import { getSessionUserId } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
 
@@ -16,7 +17,12 @@ type DeviceRow = {
   ram_pct: number | null;
 };
 
-export async function GET() {
+export async function GET(request: Request) {
+  // Antes esta ruta era pública y exponía el nombre del cliente, su plan y
+  // el estado del appliance de TODOS los dispositivos a cualquiera.
+  const userId = getSessionUserId(request);
+  if (!userId) return NextResponse.json({ error: "No autorizado." }, { status: 401 });
+
   const result = await db.execute<DeviceRow>(sql`
     select
       d.id,
@@ -33,6 +39,7 @@ export async function GET() {
       order by h.timestamp desc
       limit 1
     ) lh on true
+    where d.owner_user_id = ${userId}
     order by d.id
   `);
 

@@ -3,6 +3,7 @@ import bcrypt from "bcryptjs";
 import { eq } from "drizzle-orm";
 import { db } from "@/db";
 import { users } from "@/db/schema";
+import { createSessionToken, sessionCookieHeader } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
 
@@ -32,5 +33,7 @@ export async function POST(request: Request) {
     .values({ company, email, plan, passwordHash })
     .returning({ id: users.id, company: users.company, email: users.email, plan: users.plan, profile: users.profile });
 
-  return NextResponse.json(user, { status: 201 });
+  const res = NextResponse.json(user, { status: 201 });
+  res.headers.set("Set-Cookie", sessionCookieHeader(createSessionToken(user.id)));
+  return res;
 }

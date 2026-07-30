@@ -3,6 +3,7 @@ import bcrypt from "bcryptjs";
 import { eq } from "drizzle-orm";
 import { db } from "@/db";
 import { users } from "@/db/schema";
+import { createSessionToken, sessionCookieHeader } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
 
@@ -25,11 +26,16 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Correo o contraseña incorrectos." }, { status: 401 });
   }
 
-  return NextResponse.json({
+  // Sesión de servidor en cookie firmada (HttpOnly). Antes la "sesión" vivía
+  // solo en sessionStorage del navegador, así que el servidor no autenticaba
+  // nada: las rutas de datos quedaban abiertas a cualquiera.
+  const res = NextResponse.json({
     id: user.id,
     company: user.company,
     email: user.email,
     plan: user.plan,
     profile: user.profile,
   });
+  res.headers.set("Set-Cookie", sessionCookieHeader(createSessionToken(user.id)));
+  return res;
 }

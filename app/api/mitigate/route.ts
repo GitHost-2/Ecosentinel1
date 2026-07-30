@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
-import { eq } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
 import { db } from "@/db";
-import { detections, mitigations } from "@/db/schema";
+import { detections, devices, mitigations } from "@/db/schema";
+import { getSessionUserId } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
 
@@ -24,13 +25,24 @@ const BLOCK_THRESHOLD = 0.7;
  * el único lugar donde esa IP existe en texto plano.
  */
 export async function POST(request: Request) {
+  // Ruta que cambia estado: exige sesión, y que la detección pertenezca a un
+  // dispositivo de esa cuenta (si no, cualquiera podría enumerar ids ajenos).
+  const userId = getSessionUserId(request);
+  if (!userId) return NextResponse.json({ error: "No autorizado." }, { status: 401 });
+
   const body = await request.json().catch(() => null);
   const detectionId = Number(body?.detectionId);
   if (!Number.isInteger(detectionId) || detectionId <= 0) {
     return NextResponse.json({ error: "detectionId inválido." }, { status: 400 });
   }
 
-  const [detection] = await db.select().from(detections).where(eq(detections.id, detectionId)).limit(1);
+  const [row] = await db
+    .select({ detection: detections })
+    .from(detections)
+    .innerJoin(devices, eq(devices.id, detections.deviceId))
+    .where(and(eq(detections.id, detectionId), eq(devices.ownerUserId, userId)))
+    .limit(1);
+  const detection = row?.detection;
   if (!detection) {
     return NextResponse.json({ error: "Detección no encontrada." }, { status: 404 });
   }

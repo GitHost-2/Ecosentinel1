@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { sql } from "drizzle-orm";
 import { db } from "@/db";
-import { parseDeviceIdParam } from "@/lib/device-filter";
+import { resolveVisibleDevices } from "@/lib/device-filter";
 
 export const dynamic = "force-dynamic";
 
@@ -10,25 +10,28 @@ const BLOCK_THRESHOLD = 0.7;
 const HOURS = 24;
 
 export async function GET(request: Request) {
-  const deviceId = parseDeviceIdParam(request);
-  const deviceCond = deviceId ? sql`and device_id = ${deviceId}` : sql``;
+  const scope = await resolveVisibleDevices(request);
+  if (!scope.ok) return NextResponse.json({ error: "No autorizado." }, { status: scope.status });
 
-  const result = await db.execute<{ hour_bucket: string; detected: number; blocked: number }>(sql`
-    select
-      date_trunc('hour', "timestamp") as hour_bucket,
-      count(*)::int as detected,
-      count(*) filter (where attack_prob >= ${BLOCK_THRESHOLD})::int as blocked
-    from detections
-    where "timestamp" >= now() - interval '${sql.raw(String(HOURS))} hours'
-    ${deviceCond}
-    group by hour_bucket
-    order by hour_bucket
-  `);
-
-  // neon-http devuelve { rows, fields, ... }, no un array directo.
   const byHour = new Map<number, { detected: number; blocked: number }>();
-  for (const row of result.rows) {
-    byHour.set(new Date(row.hour_bucket).getTime(), { detected: row.detected, blocked: row.blocked });
+
+  if (scope.deviceIds.length > 0) {
+    const result = await db.execute<{ hour_bucket: string; detected: number; blocked: number }>(sql`
+      select
+        date_trunc('hour', "timestamp") as hour_bucket,
+        count(*)::int as detected,
+        count(*) filter (where attack_prob >= ${BLOCK_THRESHOLD})::int as blocked
+      from detections
+      where "timestamp" >= now() - interval '${sql.raw(String(HOURS))} hours'
+        and device_id in (${sql.join(scope.deviceIds.map((id) => sql`${id}`), sql`, `)})
+      group by hour_bucket
+      order by hour_bucket
+    `);
+
+    // neon-http devuelve { rows, fields, ... }, no un array directo.
+    for (const row of result.rows) {
+      byHour.set(new Date(row.hour_bucket).getTime(), { detected: row.detected, blocked: row.blocked });
+    }
   }
 
   // Dos arrays paralelos de 24 enteros, del más antiguo al más reciente (shape que espera drawChart()).

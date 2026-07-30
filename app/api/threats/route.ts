@@ -1,24 +1,28 @@
 import { NextResponse } from "next/server";
-import { sql } from "drizzle-orm";
+import { sql, inArray, and } from "drizzle-orm";
 import { db } from "@/db";
 import { detections } from "@/db/schema";
 import { THREAT_META, type AttackTypeLabel } from "@/lib/threat-meta";
-import { parseDeviceIdParam } from "@/lib/device-filter";
+import { resolveVisibleDevices } from "@/lib/device-filter";
 
 export const dynamic = "force-dynamic";
 
 export async function GET(request: Request) {
-  const deviceId = parseDeviceIdParam(request);
-  const deviceCond = deviceId ? sql`and ${detections.deviceId} = ${deviceId}` : sql``;
+  const scope = await resolveVisibleDevices(request);
+  if (!scope.ok) return NextResponse.json({ error: "No autorizado." }, { status: scope.status });
 
-  const rows = await db
-    .select({
-      attackType: detections.attackType,
-      count: sql<number>`count(*)::int`,
-    })
-    .from(detections)
-    .where(sql`${detections.timestamp} >= now() - interval '30 days' ${deviceCond}`)
-    .groupBy(detections.attackType);
+  const rows = scope.deviceIds.length
+    ? await db
+        .select({ attackType: detections.attackType, count: sql<number>`count(*)::int` })
+        .from(detections)
+        .where(
+          and(
+            inArray(detections.deviceId, scope.deviceIds),
+            sql`${detections.timestamp} >= now() - interval '30 days'`,
+          ),
+        )
+        .groupBy(detections.attackType)
+    : [];
 
   const total = rows.reduce((sum, r) => sum + r.count, 0) || 1;
 

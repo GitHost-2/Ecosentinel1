@@ -7,6 +7,34 @@
 
   const REDUCED = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
+  // Todo lo que venga de la API y se inserte con innerHTML pasa por aquí.
+  // `nombre_cliente` y `attack_type` vienen de la base de datos, así que un
+  // valor con HTML se ejecutaría en el navegador de quien vea el dashboard.
+  function esc(value) {
+    return String(value == null ? "" : value)
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#39;");
+  }
+
+  // Si la sesión venció o no hay, el servidor responde 401: en vez de dejar
+  // el dashboard con ceros, se manda a la persona de vuelta al login.
+  let redirecting = false;
+  async function apiGet(url) {
+    const res = await fetch(url);
+    if (res.status === 401 || res.status === 403) {
+      if (!redirecting) {
+        redirecting = true;
+        window.location.href = "/";
+      }
+      throw new Error("sesión no válida");
+    }
+    if (!res.ok) throw new Error("HTTP " + res.status);
+    return res.json();
+  }
+
   if (window.ScrambleTextPlugin) gsap.registerPlugin(ScrambleTextPlugin);
 
   function scrambleReveal(el, fullText, opts) {
@@ -90,9 +118,13 @@
 
   const logout = document.getElementById("logoutBtn");
   if (logout) {
-    logout.addEventListener("click", () => {
+    logout.addEventListener("click", async () => {
       try {
         sessionStorage.removeItem("ecosentinel_session");
+      } catch (e) {}
+      // Además de limpiar el navegador, invalida la cookie del servidor.
+      try {
+        await fetch("/api/auth/logout", { method: "POST" });
       } catch (e) {}
       window.location.href = "/";
     });
@@ -130,7 +162,7 @@
 
   async function loadDevices() {
     try {
-      devicesList = await fetch("/api/devices").then((r) => r.json());
+      devicesList = await apiGet("/api/devices");
     } catch (e) {
       console.error("No se pudo cargar /api/devices", e);
       devicesList = [];
@@ -142,7 +174,7 @@
 
       deviceSelect.innerHTML =
         '<option value="">Todos los dispositivos</option>' +
-        devicesList.map((d) => `<option value="${d.id}">${d.nombreCliente}</option>`).join("");
+        devicesList.map((d) => `<option value="${esc(d.id)}">${esc(d.nombreCliente)}</option>`).join("");
       deviceSelect.value = currentDeviceId;
     }
 
@@ -392,14 +424,14 @@
     // Solo se puede aislar lo que ya cuenta como bloqueado (alta confianza,
     // prob >= 0.7) -- misma validación que exige app/api/mitigate/route.ts.
     const isolateBtn = a.blocked
-      ? `<button class="btn btn-outline-dark isolate-btn" data-isolate="${a.id}"${a.mitigated ? " disabled" : ""}>${
+      ? `<button class="btn btn-outline-dark isolate-btn" data-isolate="${esc(a.id)}"${a.mitigated ? " disabled" : ""}>${
           a.mitigated ? "Aislado ✓" : "Aislar IP"
         }</button>`
       : "";
     return `
-      <td>${fmtTime(a.time)}</td>
-      <td><span class="ip" title="${a.ip}">${truncatedHash(a.ip)}</span></td>
-      <td><span class="badge attack">${a.type}</span></td>
+      <td>${esc(fmtTime(a.time))}</td>
+      <td><span class="ip" title="${esc(a.ip)}">${esc(truncatedHash(a.ip))}</span></td>
+      <td><span class="badge attack">${esc(a.type)}</span></td>
       <td>
         <div class="prob-bar">
           <div class="track"><i style="width:${pct}%"></i></div>
@@ -455,7 +487,7 @@
 
   async function pollStatsAndAlerts() {
     try {
-      const stats = await fetch(withDeviceParam("/api/stats")).then((r) => r.json());
+      const stats = await apiGet(withDeviceParam("/api/stats"));
       if (stats.packets !== packets) tweenStatTo(elPackets, packets, stats.packets, 1);
       if (stats.detected !== detected) tweenStatTo(elDetected, detected, stats.detected, 1);
       if (stats.blocked !== blocked) tweenStatTo(elBlocked, blocked, stats.blocked, 1);
@@ -468,7 +500,7 @@
     }
 
     try {
-      const alerts = await fetch(withDeviceParam("/api/alerts?limit=20")).then((r) => r.json());
+      const alerts = await apiGet(withDeviceParam("/api/alerts?limit=20"));
       const fresh = alerts.filter((a) => !knownAlertIds.has(a.id)).reverse(); // más viejo primero
       fresh.forEach((a) => {
         knownAlertIds.add(a.id);
@@ -481,13 +513,13 @@
     pollCount++;
     if (pollCount % HEAVY_POLL_EVERY === 0) {
       try {
-        hourlyData = await fetch(withDeviceParam("/api/hourly")).then((r) => r.json());
+        hourlyData = await apiGet(withDeviceParam("/api/hourly"));
         drawChart();
       } catch (e) {
         console.error("No se pudo refrescar /api/hourly", e);
       }
       try {
-        THREATS = await fetch(withDeviceParam("/api/threats")).then((r) => r.json());
+        THREATS = await apiGet(withDeviceParam("/api/threats"));
         drawDistribution();
         renderThreatCards();
       } catch (e) {
@@ -602,7 +634,7 @@
 
     if (legendEl) {
       legendEl.innerHTML = data
-        .map((d) => `<li><i style="background:${d.color}"></i>${d.label}<b>${d.pct}%</b></li>`)
+        .map((d) => `<li><i style="background:${esc(d.color)}"></i>${esc(d.label)}<b>${esc(d.pct)}%</b></li>`)
         .join("");
     }
 
@@ -684,13 +716,13 @@
     grid.innerHTML = THREATS.map((t) => {
       const count = Math.max(1, Math.round((detected * t.pct) / 100));
       return `
-        <div class="threat-mini-card" data-threat="${t.key}">
+        <div class="threat-mini-card" data-threat="${esc(t.key)}">
           <div class="tmc-head">
-            <span class="tmc-dot" style="background:${t.color}"></span>
-            <span class="tmc-name">${t.label}</span>
-            <span class="tmc-count">${count.toLocaleString("es-MX")}</span>
+            <span class="tmc-dot" style="background:${esc(t.color)}"></span>
+            <span class="tmc-name">${esc(t.label)}</span>
+            <span class="tmc-count">${esc(count.toLocaleString("es-MX"))}</span>
           </div>
-          <ul class="tmc-tips" hidden>${t.tips.map((tip) => `<li>${tip}</li>`).join("")}</ul>
+          <ul class="tmc-tips" hidden>${t.tips.map((tip) => `<li>${esc(tip)}</li>`).join("")}</ul>
           <div class="tmc-actions">
             <button class="btn btn-outline-dark tmc-action" data-action="review">Tomar acciones</button>
           </div>
@@ -728,7 +760,7 @@
   function openIsolateModal(guidance) {
     if (!isolateOverlay) return;
     if (isolateCmd) isolateCmd.textContent = guidance.findRealIpCommand;
-    if (isolateSteps) isolateSteps.innerHTML = guidance.steps.map((s) => `<li>${s}</li>`).join("");
+    if (isolateSteps) isolateSteps.innerHTML = guidance.steps.map((s) => `<li>${esc(s)}</li>`).join("");
     isolateOverlay.classList.add("open");
     document.body.style.overflow = "hidden";
   }
@@ -752,7 +784,7 @@
   /* ---------- Carga inicial desde la base de datos ---------- */
   async function loadDashboardData() {
     try {
-      const stats = await fetch(withDeviceParam("/api/stats")).then((r) => r.json());
+      const stats = await apiGet(withDeviceParam("/api/stats"));
       packets = stats.packets;
       detected = stats.detected;
       blocked = stats.blocked;
@@ -764,7 +796,7 @@
     }
 
     try {
-      const alerts = await fetch(withDeviceParam("/api/alerts?limit=" + MAX_ROWS)).then((r) => r.json());
+      const alerts = await apiGet(withDeviceParam("/api/alerts?limit=" + MAX_ROWS));
       // Se recorre al revés porque addAlert() hace prepend.
       alerts
         .slice()
@@ -778,14 +810,14 @@
     }
 
     try {
-      hourlyData = await fetch(withDeviceParam("/api/hourly")).then((r) => r.json());
+      hourlyData = await apiGet(withDeviceParam("/api/hourly"));
       drawChart();
     } catch (e) {
       console.error("No se pudo cargar /api/hourly", e);
     }
 
     try {
-      THREATS = await fetch(withDeviceParam("/api/threats")).then((r) => r.json());
+      THREATS = await apiGet(withDeviceParam("/api/threats"));
       drawDistribution();
       renderThreatCards();
     } catch (e) {

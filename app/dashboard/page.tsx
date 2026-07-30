@@ -1,13 +1,21 @@
 import fs from "node:fs";
 import path from "node:path";
+import { cookies } from "next/headers";
+import { redirect } from "next/navigation";
 import Script from "next/script";
+import { SESSION_COOKIE, verifySessionToken } from "@/lib/session";
 
 const dashboardHtml = fs.readFileSync(
   path.join(process.cwd(), "app/_fragments/dashboard.html"),
   "utf8",
 );
 
-export default function DashboardPage() {
+export default async function DashboardPage() {
+  // El dashboard era accesible sin iniciar sesión (no había middleware ni
+  // verificación de servidor); la "sesión" solo existía en sessionStorage.
+  const token = (await cookies()).get(SESSION_COOKIE)?.value;
+  if (!verifySessionToken(token)) redirect("/");
+
   return (
     <div className="dash-body">
       <div dangerouslySetInnerHTML={{ __html: dashboardHtml }} />
