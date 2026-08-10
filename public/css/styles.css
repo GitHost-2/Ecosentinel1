@@ -1022,6 +1022,128 @@ section {
   font-weight: 600;
   cursor: pointer;
 }
+.field-hint {
+  margin-top: 7px;
+  text-align: right;
+  font-size: 0.82rem;
+}
+.field-hint a {
+  color: var(--teal-light);
+  font-weight: 600;
+}
+.field-hint a:hover {
+  text-decoration: underline;
+}
+
+/* ============================================================
+   PÁGINAS SUELTAS DE AUTENTICACIÓN (/forgot, /reset)
+   Mismo lenguaje visual que los modales (.field, .btn, .error-msg)
+   pero como página completa, no overlay.
+   ============================================================ */
+.auth-shell {
+  min-height: 100dvh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 32px 20px;
+  background: var(--bg-1);
+}
+.auth-card {
+  width: 100%;
+  max-width: 440px;
+  background: var(--surface);
+  border: 1px solid var(--border-med);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-md);
+  padding: 40px;
+}
+.auth-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--teal-light);
+  font-weight: 700;
+  font-size: 1.1rem;
+  letter-spacing: 0.02em;
+  margin-bottom: 28px;
+}
+.auth-card h1 {
+  font-family: var(--font-head);
+  font-size: 1.5rem;
+  color: var(--text-1);
+  margin-bottom: 6px;
+}
+.auth-sub {
+  color: var(--gray);
+  font-size: 0.92rem;
+  margin-bottom: 26px;
+}
+.auth-note {
+  margin-top: 16px;
+  font-size: 0.88rem;
+  min-height: 1em;
+  color: var(--gray);
+}
+.auth-note.ok {
+  color: var(--teal-light);
+}
+.auth-note.warn {
+  color: var(--coral);
+}
+.auth-switch {
+  text-align: center;
+  margin-top: 22px;
+  font-size: 0.9rem;
+  color: var(--gray);
+}
+.auth-switch a {
+  color: var(--teal-light);
+  font-weight: 600;
+}
+.auth-switch a:hover {
+  text-decoration: underline;
+}
+
+/* ---------- Ver contraseña ---------- */
+.password-field {
+  position: relative;
+}
+.password-field input {
+  padding-right: 46px;
+}
+.password-toggle {
+  position: absolute;
+  top: 0;
+  right: 0;
+  height: 100%;
+  width: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--gray);
+  border-radius: 0 10px 10px 0;
+  transition: color 0.15s ease;
+}
+.password-toggle:hover,
+.password-toggle:focus-visible {
+  color: var(--teal-light);
+}
+.password-toggle:focus-visible {
+  outline: 2px solid var(--teal);
+  outline-offset: -2px;
+}
+.password-toggle .pt-eye-off {
+  display: none;
+}
+.password-field.showing .pt-eye {
+  display: none;
+}
+.password-field.showing .pt-eye-off {
+  display: block;
+}
 
 /* ---------- Cuestionario de perfil ---------- */
 .modal-quiz {
@@ -1772,6 +1894,21 @@ section {
   section {
     padding: 72px 0;
   }
+  /* 16px es el umbral de iOS Safari: por debajo, hace zoom automático al
+     enfocar el campo. Por debajo de eso el texto de los inputs se ve más
+     chico en escritorio, pero aquí el problema es el zoom involuntario. */
+  .field input,
+  .field select,
+  .device-select {
+    font-size: 16px;
+  }
+  .dash-header .nav-inner {
+    flex-wrap: wrap;
+    row-gap: 10px;
+  }
+  .dash-user {
+    gap: 10px;
+  }
   .nav-links,
   .nav-actions .btn-outline {
     display: none;
@@ -1877,6 +2014,9 @@ section {
     gap: 28px;
   }
   .modal {
+    padding: 30px 22px;
+  }
+  .auth-card {
     padding: 30px 22px;
   }
   .why-compare {

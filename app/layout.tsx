@@ -1,9 +1,16 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 
 export const metadata: Metadata = {
   title: "EcoSentinel",
   description:
-    "EcoSentinel: appliance de ciberseguridad perimetral con IA de borde. Detección de intrusiones en tiempo real para PyMEs, sin nube y sin latencia.",
+    "EcoSentinel: appliance de ciberseguridad perimetral con IA de borde. Detección de intrusiones en tiempo real por suscripción, sin nube y sin latencia.",
+};
+
+// Explícito (Next ya lo infiere por defecto, pero así queda documentado):
+// sin maximum-scale, para no bloquear el zoom táctil por accesibilidad.
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
