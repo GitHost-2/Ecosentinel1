@@ -12,6 +12,7 @@
             <div class="user-name" id="userName">Mi Cuenta</div>
             <div class="user-plan" id="userPlan">Plan Pro</div>
           </div>
+          <button class="btn btn-outline-dark" id="changePwBtn">Cambiar contraseña</button>
           <button class="btn btn-outline-dark" id="logoutBtn">Cerrar sesión</button>
         </div>
       </div>
@@ -203,5 +204,35 @@
         <p class="isolate-cmd-label">Para ver la IP real (nunca sale de tu RPi), corre esto por SSH en el dispositivo:</p>
         <pre class="isolate-cmd" id="isolateCmd"></pre>
         <ol class="isolate-steps" id="isolateSteps"><!-- inyectado por dashboard.js --></ol>
+      </div>
+    </div>
+
+    <!-- MODAL: cambiar contraseña (con la sesión abierta) -->
+    <div class="modal-overlay" id="changePwOverlay" role="dialog" aria-modal="true" aria-labelledby="changePwTitle">
+      <div class="modal" id="changePwModal">
+        <button class="modal-close" data-close-changepw aria-label="Cerrar">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
+        </button>
+        <h3 id="changePwTitle">Cambiar contraseña</h3>
+        <p class="modal-sub">Escribe tu contraseña actual y la nueva.</p>
+        <form id="changePwForm" novalidate>
+          <div class="field">
+            <label for="cpCurrent">Contraseña actual</label>
+            <input type="password" id="cpCurrent" name="currentPassword" autocomplete="current-password" placeholder="Tu contraseña de ahora" />
+            <div class="error-msg" data-error="currentPassword"></div>
+          </div>
+          <div class="field">
+            <label for="cpNew">Nueva contraseña</label>
+            <input type="password" id="cpNew" name="newPassword" autocomplete="new-password" placeholder="Mínimo 8 caracteres" />
+            <div class="error-msg" data-error="newPassword"></div>
+          </div>
+          <div class="field">
+            <label for="cpConfirm">Confirmar nueva contraseña</label>
+            <input type="password" id="cpConfirm" name="confirm" autocomplete="new-password" placeholder="Repite la nueva contraseña" />
+            <div class="error-msg" data-error="confirm"></div>
+          </div>
+          <button type="submit" class="btn btn-teal btn-block btn-lg">Guardar contraseña</button>
+          <p class="auth-note" id="changePwNote" role="status" aria-live="polite"></p>
+        </form>
       </div>
     </div>

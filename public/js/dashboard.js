@@ -130,6 +130,96 @@
     });
   }
 
+  /* ---------- Cambiar contraseña (con la sesión abierta) ----------
+     POST /api/auth/change-password: pide la contraseña actual + la nueva.
+     Distinto de /reset (ese es SIN sesión, con el token del correo). */
+  (function setupChangePassword() {
+    var overlay = document.getElementById("changePwOverlay");
+    var form = document.getElementById("changePwForm");
+    var openBtn = document.getElementById("changePwBtn");
+    if (!overlay || !form || !openBtn) return;
+    var note = document.getElementById("changePwNote");
+
+    function setError(campo, msg) {
+      var el = form.querySelector('[data-error="' + campo + '"]');
+      if (el) el.textContent = msg || "";
+    }
+    function clearErrors() {
+      form.querySelectorAll(".error-msg").forEach(function (el) { el.textContent = ""; });
+    }
+    function setNote(texto, tipo) {
+      if (!note) return;
+      note.textContent = texto || "";
+      note.className = "auth-note" + (tipo ? " " + tipo : "");
+    }
+    function open() {
+      clearErrors(); setNote(""); form.reset();
+      overlay.classList.add("open");
+      document.body.style.overflow = "hidden";
+      var f = document.getElementById("cpCurrent");
+      if (f) f.focus();
+    }
+    function close() {
+      overlay.classList.remove("open");
+      document.body.style.overflow = "";
+    }
+
+    openBtn.addEventListener("click", open);
+    overlay.querySelectorAll("[data-close-changepw]").forEach(function (b) {
+      b.addEventListener("click", close);
+    });
+    overlay.addEventListener("click", function (e) { if (e.target === overlay) close(); });
+    document.addEventListener("keydown", function (e) {
+      if (e.key === "Escape" && overlay.classList.contains("open")) close();
+    });
+
+    form.addEventListener("submit", async function (e) {
+      e.preventDefault();
+      clearErrors(); setNote("");
+
+      var current = form.currentPassword.value;
+      var nueva = form.newPassword.value;
+      var confirm = form.confirm.value;
+      var ok = true;
+
+      if (!current) { setError("currentPassword", "Escribe tu contraseña actual."); ok = false; }
+      // Misma política que el servidor (mínimo 8); el servidor manda igual.
+      if (nueva.length < 8) { setError("newPassword", "La nueva debe tener al menos 8 caracteres."); ok = false; }
+      if (confirm !== nueva) { setError("confirm", "Las contraseñas no coinciden."); ok = false; }
+      if (ok && nueva === current) { setError("newPassword", "La nueva debe ser distinta de la actual."); ok = false; }
+      if (!ok) return;
+
+      var submitBtn = form.querySelector('button[type="submit"]');
+      if (submitBtn) submitBtn.disabled = true;
+      try {
+        var res = await fetch("/api/auth/change-password", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ currentPassword: current, newPassword: nueva }),
+        });
+        var data = await res.json().catch(function () { return {}; });
+        if (!res.ok) {
+          // El servidor distingue "actual incorrecta" (400) del resto; se
+          // muestra junto al campo adecuado cuando aplica.
+          if (res.status === 400 && /actual/i.test(data.error || "")) {
+            setError("currentPassword", data.error);
+          } else {
+            setNote(data.error || "No se pudo cambiar la contraseña.", "warn");
+          }
+          if (submitBtn) submitBtn.disabled = false;
+          return;
+        }
+        setNote(data.message || "Tu contraseña se actualizó.", "ok");
+        form.reset();
+        setTimeout(close, 1500);
+        if (submitBtn) submitBtn.disabled = false;
+      } catch (err) {
+        setNote("No se pudo conectar con el servidor. Intenta de nuevo.", "warn");
+        if (submitBtn) submitBtn.disabled = false;
+      }
+    });
+  })();
+
   /* ---------- Filtro de dispositivo (persiste en sessionStorage) ---------- */
   const DEVICE_FILTER_KEY = "ecosentinel_device_filter";
   let currentDeviceId = "";

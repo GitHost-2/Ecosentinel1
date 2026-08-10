@@ -23,6 +23,7 @@ export default async function DashboardPage() {
       <Script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.13.0/gsap.min.js" strategy="beforeInteractive" />
       <Script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.13.0/ScrambleTextPlugin.min.js" strategy="beforeInteractive" />
       <Script src="/js/dashboard.js" strategy="afterInteractive" />
+      <Script src="/js/password-toggle.js" strategy="afterInteractive" />
     </div>
   );
 }

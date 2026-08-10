@@ -188,6 +188,12 @@ export const LIMITS = {
    * bcrypt.hash (lento a propósito) por petición válida.
    */
   passwordResetPerIp: { limit: envInt("RL_RESET_IP_LIMIT", 10), windowSeconds: 15 * 60 },
+  /**
+   * Cambio de contraseña con la sesión abierta. Ya exige sesión válida, así que
+   * no es un vector abierto; el límite acota que una sesión robada intente
+   * adivinar la contraseña ACTUAL a fuerza de bcrypt.compare.
+   */
+  changePasswordPerUser: { limit: envInt("RL_CHANGEPW_USER_LIMIT", 10), windowSeconds: 15 * 60 },
   /** Ingesta por dispositivo autenticado: el freno real ante una key filtrada. */
   ingestPerDevice: { limit: envInt("RL_INGEST_DEVICE_LIMIT", 1200), windowSeconds: 60 },
   /** Ingesta por IP, ANTES de autenticar: evita que keys inválidas golpeen la base sin freno. */
