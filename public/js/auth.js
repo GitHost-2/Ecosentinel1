@@ -224,7 +224,7 @@
       let ok = true;
 
       if (company.length < 2) {
-        setError(registerForm, "company", "Ingresa el nombre de tu empresa.");
+        setError(registerForm, "company", "Dinos cómo te llamamos.");
         ok = false;
       }
       if (!isEmail(email)) {

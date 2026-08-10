@@ -107,13 +107,13 @@
       const raw = sessionStorage.getItem("ecosentinel_session");
       if (raw) return JSON.parse(raw);
     } catch (e) {}
-    return { company: "Mi Empresa", email: "demo@empresa.com", plan: "Pro", profile: "intermedio" };
+    return { company: "Mi Cuenta", email: "demo@ejemplo.com", plan: "Pro", profile: "intermedio" };
   }
 
   const session = loadSession();
   const nameEl = document.getElementById("userName");
   const planEl = document.getElementById("userPlan");
-  if (nameEl) nameEl.textContent = session.company || "Mi Empresa";
+  if (nameEl) nameEl.textContent = session.company || "Mi Cuenta";
   if (planEl) planEl.textContent = "Plan " + (session.plan || "Basic");
 
   const logout = document.getElementById("logoutBtn");
@@ -206,7 +206,7 @@
     principiante: {
       label: "Principiante",
       tips: [
-        "Activa la verificación en dos pasos en tu correo empresarial: aunque alguien robe tu contraseña, no podrá entrar sin el código extra que solo tú recibes.",
+        "Activa la verificación en dos pasos en tu correo: aunque alguien robe tu contraseña, no podrá entrar sin el código extra que solo tú recibes.",
         "Cambia las contraseñas de fábrica de tu router y cámaras (como \"admin123\"); son las primeras que prueba un atacante.",
         "No abras archivos adjuntos de correos inesperados, aunque parezcan venir de un banco o proveedor conocido.",
         "Haz una copia de tus archivos importantes al menos una vez por semana, en un disco externo o en la nube.",
