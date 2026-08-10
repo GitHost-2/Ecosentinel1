@@ -169,6 +169,25 @@ export const LIMITS = {
    * límite por IP le obliga a repartirlo entre varias IPs.
    */
   loginPerEmail: { limit: envInt("RL_LOGIN_EMAIL_LIMIT", 30), windowSeconds: 15 * 60 },
+  /**
+   * "Olvidé mi contraseña" por IP. Más estricto que el login porque cada
+   * petición aceptada cuesta un correo a un tercero: sin freno, este endpoint
+   * es una máquina de spam gratis contra cualquier buzón (y quema la cuota de
+   * Resend, igual que pasó con las 91 llamadas fallidas de §5.14).
+   */
+  forgotPerIp: { limit: envInt("RL_FORGOT_IP_LIMIT", 5), windowSeconds: 15 * 60 },
+  /**
+   * Por correo: evita el acoso a UNA cuenta desde muchas IPs. No abre un DoS
+   * de cuenta como el de login —agotar el cupo no impide entrar, solo pedir
+   * otro enlace— y el enlace ya enviado sigue siendo válido su hora.
+   */
+  forgotPerEmail: { limit: envInt("RL_FORGOT_EMAIL_LIMIT", 3), windowSeconds: 60 * 60 },
+  /**
+   * Canje del token. Adivinarlo es inviable (256 bits), así que esto no es el
+   * freno principal: solo evita que alguien machaque el endpoint, que hace un
+   * bcrypt.hash (lento a propósito) por petición válida.
+   */
+  passwordResetPerIp: { limit: envInt("RL_RESET_IP_LIMIT", 10), windowSeconds: 15 * 60 },
   /** Ingesta por dispositivo autenticado: el freno real ante una key filtrada. */
   ingestPerDevice: { limit: envInt("RL_INGEST_DEVICE_LIMIT", 1200), windowSeconds: 60 },
   /** Ingesta por IP, ANTES de autenticar: evita que keys inválidas golpeen la base sin freno. */

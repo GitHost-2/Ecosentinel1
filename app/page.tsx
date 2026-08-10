@@ -19,6 +19,7 @@ export default function LandingPage() {
       <Script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.13.0/ScrambleTextPlugin.min.js" strategy="beforeInteractive" />
       <Script src="/js/animations.js" strategy="afterInteractive" />
       <Script src="/js/auth.js" strategy="afterInteractive" />
+      <Script src="/js/password-toggle.js" strategy="afterInteractive" />
     </>
   );
 }

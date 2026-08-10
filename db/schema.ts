@@ -116,3 +116,32 @@ export const deviceHeartbeats = pgTable("device_heartbeats", {
 }, (table) => [
   index("device_heartbeats_device_id_timestamp_idx").on(table.deviceId, table.timestamp),
 ]);
+
+// Tokens de "olvidé mi contraseña" (ver app/api/auth/forgot y app/api/auth/reset).
+//
+// Aquí NUNCA vive el token que recibe el usuario: se guarda solo su SHA-256.
+// Si alguien lee esta tabla (dump, backup, acceso a Neon) no puede reconstruir
+// ningún enlace de reset, igual que con `devices.api_key_hash`. No hace falta
+// bcrypt como en `users.password_hash`: el token son 32 bytes aleatorios, no
+// una contraseña adivinable, así que un hash rápido no es un problema — y sí
+// hace falta que sea rápido y determinista para poder buscarlo por índice.
+//
+// `used_at` nullable = todavía sin usar. El reset lo reclama con un UPDATE
+// condicional (`... WHERE used_at IS NULL`), que es lo que hace que el enlace
+// sea de un SOLO uso incluso con dos peticiones simultáneas.
+export const passwordResetTokens = pgTable("password_reset_tokens", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  tokenHash: text("token_hash").notNull(),
+  expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+  usedAt: timestamp("used_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [
+  // Único: la búsqueda del reset es por hash, y dos filas con el mismo hash
+  // serían un token duplicado (imposible con 32 bytes, pero el índice lo fija).
+  uniqueIndex("password_reset_tokens_token_hash_idx").on(table.tokenHash),
+  // Para invalidar de golpe los tokens vivos de un usuario.
+  index("password_reset_tokens_user_id_idx").on(table.userId),
+]);
