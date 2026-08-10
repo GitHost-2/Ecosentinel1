@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
-import { desc, eq, inArray } from "drizzle-orm";
+import { desc, eq, and, inArray } from "drizzle-orm";
 import { db } from "@/db";
-import { detections, mitigations } from "@/db/schema";
+import { detections, mitigations, isolationOrders } from "@/db/schema";
 import { resolveVisibleDevices } from "@/lib/device-filter";
 
 export const dynamic = "force-dynamic";
@@ -19,15 +19,23 @@ export async function GET(request: Request) {
   const limit = Math.min(Number(searchParams.get("limit")) || DEFAULT_LIMIT, 50);
 
   const rows = await db
-    .select({ detection: detections, mitigatedAt: mitigations.createdAt })
+    .select({ detection: detections, mitigatedAt: mitigations.createdAt, isolation: isolationOrders.applied })
     .from(detections)
     .leftJoin(mitigations, eq(mitigations.detectionId, detections.id))
+    // Por (deviceId, srcIpHash), no por detectionId: la orden de aislamiento
+    // aplica al ATACANTE, así que otras detecciones del mismo hash también
+    // deben mostrarse como aisladas, no solo la que la disparó.
+    .leftJoin(
+      isolationOrders,
+      and(eq(isolationOrders.deviceId, detections.deviceId), eq(isolationOrders.srcIpHash, detections.srcIpHash)),
+    )
     .where(inArray(detections.deviceId, scope.deviceIds))
     .orderBy(desc(detections.timestamp))
     .limit(limit);
 
-  // Shape que espera dashboard.js: { id, time, ip, type, prob, blocked, mitigated }.
-  const alerts = rows.map(({ detection: row, mitigatedAt }) => ({
+  // Shape que espera dashboard.js: { id, time, ip, type, prob, blocked, mitigated, isolation }.
+  // `isolation`: null (nunca se pidió) | 'pending' | 'isolated' | 'released' | 'failed'.
+  const alerts = rows.map(({ detection: row, mitigatedAt, isolation }) => ({
     id: row.id,
     time: row.timestamp.toISOString(),
     ip: row.srcIpHash,
@@ -35,6 +43,7 @@ export async function GET(request: Request) {
     prob: row.attackProb,
     blocked: row.attackProb >= BLOCK_THRESHOLD,
     mitigated: !!mitigatedAt,
+    isolation: isolation ?? null,
   }));
 
   return NextResponse.json(alerts);

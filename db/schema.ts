@@ -129,6 +129,44 @@ export const deviceHeartbeats = pgTable("device_heartbeats", {
 // `used_at` nullable = todavía sin usar. El reset lo reclama con un UPDATE
 // condicional (`... WHERE used_at IS NULL`), que es lo que hace que el enlace
 // sea de un SOLO uso incluso con dos peticiones simultáneas.
+// Orden de aislamiento REAL de una IP (corte por ARP spoofing, ejecutado EN
+// la RPi -- ver rpi/arp_isolate.py). Distinta de `mitigations`: aquella solo
+// registra que un humano confirmó la intención y da una guía manual; esta
+// tabla es la cola de trabajo entre el panel y el dispositivo.
+//
+// La IP real NUNCA vive aquí -- solo `src_ip_hash`, igual que en `detections`.
+// La RPi resuelve el hash contra su propio mapa local efímero
+// (detección reciente -> IP real, con TTL) para saber a quién aislar; si el
+// hash ya no está en ese mapa (p. ej. el servicio se reinició), no puede
+// cumplir la orden y la marca `failed` con una nota, sin inventar la IP.
+//
+// `desired` vs `applied` en vez de un solo estado: así "aislar" y "liberar"
+// son el MISMO mecanismo (cambiar `desired` y dejar `applied` en pending
+// hasta que la RPi confirme), y el índice único por (deviceId, srcIpHash)
+// evita dos órdenes vivas para el mismo atacante.
+export const isolationOrders = pgTable("isolation_orders", {
+  id: serial("id").primaryKey(),
+  deviceId: integer("device_id")
+    .notNull()
+    .references(() => devices.id, { onDelete: "cascade" }),
+  srcIpHash: text("src_ip_hash").notNull(),
+  // Detección que originó la orden más reciente. Solo informativo (para
+  // enlazarla en el panel); el aislamiento aplica al hash, no a un id puntual.
+  detectionId: integer("detection_id").references(() => detections.id, { onDelete: "set null" }),
+  desired: text("desired").notNull(), // 'isolated' | 'released'
+  applied: text("applied").notNull().default("pending"), // 'pending' | 'isolated' | 'released' | 'failed'
+  note: text("note"), // motivo si applied='failed' (p. ej. "ip fuera del mapa local")
+  requestedByUserId: integer("requested_by_user_id")
+    .notNull()
+    .references(() => users.id),
+  requestedAt: timestamp("requested_at", { withTimezone: true }).notNull().defaultNow(),
+  resolvedAt: timestamp("resolved_at", { withTimezone: true }),
+}, (table) => [
+  uniqueIndex("isolation_orders_device_hash_idx").on(table.deviceId, table.srcIpHash),
+  // Para que la RPi pida "dame lo pendiente de ESTE dispositivo" con índice.
+  index("isolation_orders_device_applied_idx").on(table.deviceId, table.applied),
+]);
+
 export const passwordResetTokens = pgTable("password_reset_tokens", {
   id: serial("id").primaryKey(),
   userId: integer("user_id")

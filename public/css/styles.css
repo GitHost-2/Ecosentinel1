@@ -1782,6 +1782,18 @@ section {
   background: rgba(47, 143, 134, 0.16);
   color: var(--teal-light);
 }
+.badge.isolated {
+  background: rgba(47, 143, 134, 0.16);
+  color: var(--teal-light);
+}
+.badge.isolating {
+  background: rgba(139, 153, 166, 0.16);
+  color: var(--gray);
+}
+.badge.isolate-failed {
+  background: var(--coral-soft);
+  color: var(--coral);
+}
 .action-cell {
   display: flex;
   align-items: center;
@@ -1792,6 +1804,18 @@ section {
   padding: 6px 10px;
   font-size: 0.78rem;
   border-radius: 7px;
+}
+.isolate-lift {
+  font-size: 0.78rem;
+  color: var(--gray);
+  text-decoration: underline;
+  cursor: pointer;
+  background: none;
+  border: none;
+  padding: 0;
+}
+.isolate-lift:hover {
+  color: var(--coral);
 }
 .isolate-btn:disabled {
   cursor: default;

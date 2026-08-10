@@ -40,6 +40,16 @@ try:
 except ImportError:
     psutil = None
 
+try:
+    sys.path.insert(0, str(Path(__file__).parent))
+    from arp_isolate import IpMemory
+    from isolate_server import IsolateService, start_isolate_server, start_poll_thread
+    _ISOLATE_AVAILABLE = True
+except ImportError as e:  # pragma: no cover - degradacion defensiva
+    IpMemory = None
+    _ISOLATE_AVAILABLE = False
+    _ISOLATE_IMPORT_ERROR = e
+
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s  %(levelname)-7s  %(message)s",
@@ -617,6 +627,13 @@ def _load_or_create_device_salt():
 
 DEVICE_SALT = _load_or_create_device_salt()
 
+# Mapa efimero hash->IP real para "Aislar IP" (ver rpi/arp_isolate.py). Se
+# inicializa siempre (no solo en --live): es memoria pura, sin red ni
+# privilegios, así que existe aunque el soporte de aislamiento no se use.
+# `--validate` nunca llama a send_detection(), asi que en ese modo se queda
+# vacio y no cambia nada del analisis offline.
+IP_MEMORY = IpMemory(ttl_seconds=900, max_size=500) if _ISOLATE_AVAILABLE else None
+
 
 def hash_ip(ip: str) -> str:
     """HMAC-SHA256 de la IP con una clave local secreta que NUNCA sale
@@ -628,11 +645,17 @@ def hash_ip(ip: str) -> str:
 
 def send_detection(key, prob, flow):
     src, dst, dport, proto = key
+    hashed = hash_ip(src)
+    if IP_MEMORY is not None:
+        # Se recuerda ANTES de mandar nada: es la unica ventana en la que
+        # "Aislar IP" podra resolver este hash a la IP real, y solo dura
+        # IP_MEMORY.ttl_seconds -- ver rpi/isolate_server.py.
+        IP_MEMORY.remember(hashed, src)
     enqueue_send("/api/ingest/detections", {
         "attack_prob": round(float(prob), 4),
         "attack_type": heuristic_attack_type(flow, key),
         "protocol": proto if proto in ("TCP", "UDP", "ICMP") else "OTHER",
-        "src_ip": hash_ip(src),  # HMAC-SHA256 local -- nunca la IP en claro
+        "src_ip": hashed,  # HMAC-SHA256 local -- nunca la IP en claro
         "dst_port": dport,
     })
 
@@ -974,6 +997,23 @@ def run_live(interface, model, threshold, scaler, features, debug=False, trusted
     start_sender_thread()
     start_heartbeat_thread(packets_since_hb)
     start_api_ip_refresher_thread(trusted_ips)
+
+    # "Aislar IP" real (corte por ARP, ver arp_isolate.py / isolate_server.py).
+    # Necesita la API configurada (para pedir/confirmar ordenes) y que los
+    # modulos hayan importado bien (requieren scapy, que --live ya exige).
+    if _ISOLATE_AVAILABLE and api_configured():
+        try:
+            isolate_service = IsolateService(
+                iface=interface, api_url=API_URL, api_key=API_KEY,
+                ip_memory=IP_MEMORY, enqueue_ack=enqueue_send,
+            )
+            start_isolate_server(isolate_service)
+            start_poll_thread(isolate_service)
+        except Exception as e:
+            log.error(f"[isolate] no se pudo arrancar el soporte de aislamiento real: {e}")
+    elif not _ISOLATE_AVAILABLE:
+        log.warning(f"[isolate] modulos de aislamiento no disponibles ({_ISOLATE_IMPORT_ERROR}); "
+                    "\"Aislar IP\" solo dara la guia manual.")
 
     def process_flow(key, flow, debug=False):
         vec = extract_features_from_flow(flow, features, debug=debug)

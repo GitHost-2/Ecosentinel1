@@ -196,9 +196,9 @@
       <div class="modal" id="isolateModal" role="dialog" aria-modal="true" aria-labelledby="isolateTitle">
         <button class="modal-close" data-close-isolate aria-label="Cerrar">&times;</button>
         <h3 id="isolateTitle">Acciones para bloquear esta IP</h3>
+        <p class="modal-sub" id="isolateRealMsg">Enviando la solicitud de aislamiento automático a tu RPi…</p>
         <p class="modal-sub">
-          EcoSentinel no bloquea nada por sí solo -- tu Raspberry Pi es un cliente WiFi, no está "en línea" en tu
-          red, así que no puede cortar el tráfico de otro dispositivo. Sigue estos pasos:
+          Mientras confirmas ahí (o si tu RPi no tiene este soporte), aquí tienes el bloqueo manual:
         </p>
         <p class="isolate-cmd-label">Para ver la IP real (nunca sale de tu RPi), corre esto por SSH en el dispositivo:</p>
         <pre class="isolate-cmd" id="isolateCmd"></pre>

@@ -416,18 +416,44 @@
     return hash.slice(0, 10) + "…";
   }
 
+  // Estado del corte REAL por ARP (ver app/api/mitigate/isolate). Distinto de
+  // `a.mitigated` (que solo registra la confirmación humana de la guía
+  // manual): esto refleja lo que la RPi de verdad hizo con el ARP.
+  function isolationBadgeAndActions(a) {
+    switch (a.isolation) {
+      case "pending":
+        return {
+          badge: '<span class="badge isolating">Aislando…</span>',
+          extra: "",
+        };
+      case "isolated":
+        return {
+          badge: '<span class="badge isolated">Aislado (ARP) ✓</span>',
+          extra: `<button class="isolate-lift" data-lift="${esc(a.id)}">Quitar aislamiento</button>`,
+        };
+      case "failed":
+        return { badge: '<span class="badge isolate-failed">Aislamiento falló</span>', extra: "" };
+      default:
+        return { badge: "", extra: "" };
+    }
+  }
+
   function rowHTML(a) {
     const pct = Math.round(a.prob * 100);
     const statusBadge = a.blocked
       ? '<span class="badge blocked">Bloqueado</span>'
       : '<span class="badge allowed">Permitido</span>';
     // Solo se puede aislar lo que ya cuenta como bloqueado (alta confianza,
-    // prob >= 0.7) -- misma validación que exige app/api/mitigate/route.ts.
-    const isolateBtn = a.blocked
-      ? `<button class="btn btn-outline-dark isolate-btn" data-isolate="${esc(a.id)}"${a.mitigated ? " disabled" : ""}>${
-          a.mitigated ? "Aislado ✓" : "Aislar IP"
-        }</button>`
-      : "";
+    // prob >= 0.7) -- misma validación que exigen app/api/mitigate/route.ts
+    // y app/api/mitigate/isolate/route.ts.
+    const canRetryIsolate = a.isolation !== "pending" && a.isolation !== "isolated";
+    const isolateBtn =
+      a.blocked && canRetryIsolate
+        ? `<button class="btn btn-outline-dark isolate-btn" data-isolate="${esc(a.id)}">${
+            a.mitigated ? "Aislar IP" : "Aislar IP"
+          }</button>`
+        : "";
+    const { badge: isolationBadge, extra: isolationExtra } = a.blocked ? isolationBadgeAndActions(a) : { badge: "", extra: "" };
     return `
       <td>${esc(fmtTime(a.time))}</td>
       <td><span class="ip" title="${esc(a.ip)}">${esc(truncatedHash(a.ip))}</span></td>
@@ -438,24 +464,71 @@
           <span>${a.prob.toFixed(2)}</span>
         </div>
       </td>
-      <td class="action-cell">${statusBadge}${isolateBtn}</td>`;
+      <td class="action-cell">${statusBadge}${isolationBadge}${isolateBtn}${isolationExtra}</td>`;
   }
+
+  // <tr> por id de alerta + último `isolation` pintado, para poder refrescar
+  // SOLO esa fila cuando la RPi confirma un cambio (pending -> isolated, por
+  // ejemplo) sin esperar a que llegue una alerta nueva.
+  const rowById = new Map();
+  const lastIsolationById = new Map();
 
   function addAlert(a, animate) {
     if (!alertsBody) return;
     const tr = document.createElement("tr");
     tr.innerHTML = rowHTML(a);
     alertsBody.prepend(tr);
+    rowById.set(a.id, tr);
+    lastIsolationById.set(a.id, a.isolation ?? null);
     while (alertsBody.children.length > MAX_ROWS) {
-      alertsBody.removeChild(alertsBody.lastChild);
+      const dropped = alertsBody.lastChild;
+      for (const [id, el] of rowById) {
+        if (el === dropped) {
+          rowById.delete(id);
+          lastIsolationById.delete(id);
+          break;
+        }
+      }
+      alertsBody.removeChild(dropped);
     }
     if (animate && !REDUCED) {
       gsap.from(tr, { backgroundColor: "rgba(196,105,74,0.16)", opacity: 0, y: -8, duration: 0.5, ease: "power2.out" });
     }
   }
 
+  /** Repinta una fila ya visible si su estado de aislamiento cambió. */
+  function refreshIsolationRow(a) {
+    const tr = rowById.get(a.id);
+    if (!tr) return;
+    const nuevo = a.isolation ?? null;
+    if (lastIsolationById.get(a.id) === nuevo) return;
+    lastIsolationById.set(a.id, nuevo);
+    tr.innerHTML = rowHTML(a);
+  }
+
   if (alertsBody) {
     alertsBody.addEventListener("click", async (e) => {
+      const liftBtn = e.target.closest("[data-lift]");
+      if (liftBtn && !liftBtn.disabled) {
+        const detectionId = Number(liftBtn.getAttribute("data-lift"));
+        liftBtn.disabled = true;
+        liftBtn.textContent = "Quitando…";
+        try {
+          const res = await fetch("/api/mitigate/lift", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ detectionId }),
+          });
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok) throw new Error(data.error || "No se pudo procesar la solicitud.");
+        } catch (err) {
+          liftBtn.disabled = false;
+          liftBtn.textContent = "Quitar aislamiento";
+          window.alert("No se pudo quitar el aislamiento: " + err.message);
+        }
+        return;
+      }
+
       const btn = e.target.closest("[data-isolate]");
       if (!btn || btn.disabled) return;
       const detectionId = Number(btn.getAttribute("data-isolate"));
@@ -463,15 +536,38 @@
       btn.disabled = true;
       btn.textContent = "Aislando…";
       try {
-        const res = await fetch("/api/mitigate", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ detectionId }),
-        });
-        const data = await res.json().catch(() => ({}));
-        if (!res.ok) throw new Error(data.error || "No se pudo procesar la solicitud.");
-        btn.textContent = "Aislado ✓";
-        openIsolateModal(data.guidance);
+        // Dos peticiones en paralelo: la guía manual (siempre disponible,
+        // nunca toca la red) y la orden real para la RPi (ver
+        // app/api/mitigate/isolate). Si la segunda falla -- p. ej. la RPi no
+        // tiene soporte de aislamiento real, o está fuera de línea -- la
+        // guía manual sigue sirviendo como respaldo, así que su error no
+        // debe tumbar el flujo completo.
+        const [guiaRes, realRes] = await Promise.all([
+          fetch("/api/mitigate", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ detectionId }),
+          }),
+          fetch("/api/mitigate/isolate", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ detectionId }),
+          }).catch((err) => {
+            console.error("No se pudo pedir el aislamiento real", err);
+            return null;
+          }),
+        ]);
+        const guia = await guiaRes.json().catch(() => ({}));
+        if (!guiaRes.ok) throw new Error(guia.error || "No se pudo procesar la solicitud.");
+
+        let mensajeReal = null;
+        if (realRes && realRes.ok) {
+          const real = await realRes.json().catch(() => ({}));
+          mensajeReal = real.message || null;
+        }
+
+        btn.textContent = "Solicitado";
+        openIsolateModal(guia.guidance, mensajeReal);
       } catch (err) {
         btn.disabled = false;
         btn.textContent = originalText;
@@ -504,8 +600,15 @@
       const fresh = alerts.filter((a) => !knownAlertIds.has(a.id)).reverse(); // más viejo primero
       fresh.forEach((a) => {
         knownAlertIds.add(a.id);
-        addAlert({ id: a.id, time: new Date(a.time), ip: a.ip, type: a.type, prob: a.prob, blocked: a.blocked, mitigated: a.mitigated }, true);
+        addAlert(
+          { id: a.id, time: new Date(a.time), ip: a.ip, type: a.type, prob: a.prob, blocked: a.blocked, mitigated: a.mitigated, isolation: a.isolation },
+          true,
+        );
       });
+      // Las que ya estaban en pantalla no se vuelven a insertar, pero su
+      // aislamiento sí puede haber cambiado desde el último poll (la RPi
+      // confirmó, o falló) -- se repinta solo esa celda si hace falta.
+      alerts.forEach((a) => refreshIsolationRow(a));
     } catch (e) {
       console.error("No se pudo refrescar /api/alerts", e);
     }
@@ -748,19 +851,28 @@
     });
   }
 
-  /* ---------- Aislar IP: acción real sobre una detección de alta confianza ----------
-     Nunca toca la red sola (la RPi es cliente WiFi, no está en línea en la
-     red -- no puede bloquear tráfico ajeno). Confirma en el backend
-     (POST /api/mitigate, exige prob >= 0.7) y muestra la guía para
-     bloquear la IP real donde sí se puede: el router del cliente. */
+  /* ---------- Aislar IP: guía manual + orden real para la RPi ----------
+     El panel NUNCA ve la IP real (solo su hash), así que nunca puede mostrar
+     "¿realmente quieres aislar esta IP?" -- ese paso ocurre en el panel LOCAL
+     de la RPi (http://ecosentinel.local:8843/), que es la única que resuelve
+     el hash a la IP real y confirma antes de tocar el ARP. Aquí solo se
+     confirma que la solicitud salió, y se deja la guía manual como respaldo
+     si el corte automático no aplica (RPi sin este soporte, fuera de línea,
+     hash fuera de su mapa local, etc). */
   const isolateOverlay = document.getElementById("isolateOverlay");
   const isolateCmd = document.getElementById("isolateCmd");
   const isolateSteps = document.getElementById("isolateSteps");
+  const isolateRealMsg = document.getElementById("isolateRealMsg");
 
-  function openIsolateModal(guidance) {
+  function openIsolateModal(guidance, mensajeReal) {
     if (!isolateOverlay) return;
     if (isolateCmd) isolateCmd.textContent = guidance.findRealIpCommand;
     if (isolateSteps) isolateSteps.innerHTML = guidance.steps.map((s) => `<li>${esc(s)}</li>`).join("");
+    if (isolateRealMsg) {
+      isolateRealMsg.textContent =
+        mensajeReal ||
+        "No se pudo pedir el corte automático (tu RPi podría no tener este soporte o estar fuera de línea). Usa la guía manual de abajo mientras tanto.";
+    }
     isolateOverlay.classList.add("open");
     document.body.style.overflow = "hidden";
   }
