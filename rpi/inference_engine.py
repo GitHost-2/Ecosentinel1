@@ -316,6 +316,16 @@ def _sender_worker():
         path, payload = _send_queue.get()
         try:
             _post_json(path, payload)
+        except Exception as e:
+            # Defensa en profundidad. _post_json y _ensure_api_ip_trusted ya
+            # capturan sus propias excepciones, asi que en la practica esto no
+            # se dispara -- pero si ALGUNA vez una excepcion inesperada saliera
+            # de aqui, este except impide que el hilo emisor muera. Un hilo
+            # emisor muerto deja de mandar heartbeats Y detecciones EN SILENCIO
+            # (el appliance sale "desconectado" y ningun escaneo genera alerta).
+            # Es exactamente el fallo del 2026-07-28 (UnboundLocalError, ver
+            # reporte §5.4): que no vuelva a poder pasar por ninguna via.
+            log.error(f"[api] excepcion no controlada al enviar a {path}: {e}")
         finally:
             _send_queue.task_done()
 
