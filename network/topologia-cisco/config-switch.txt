@@ -25,18 +25,18 @@ configure terminal
 ! --- Identidad del dispositivo ---
 hostname SW-ECOSENTINEL
 
-! --- Hardening base: credenciales y cifrado de contrasenas ---
-! (doc, seccion 3.2 "Reglas minimas de seguridad": credenciales seguras)
-enable secret Ec0S3ntinel$SW
-service password-encryption
+! --- Hardening base ---
+! SIN CONTRASENAS: dispositivo compartido de laboratorio, cualquiera con
+! acceso fisico/de gestion a el debe poder entrar sin credenciales.
 ! Evita que un typo intente resolverse por DNS y cuelgue la consola
 no ip domain-lookup
 ip domain-name ecosentinel.local
 
-! --- Banner legal / trazabilidad ---
+! --- Banner / trazabilidad ---
 banner motd #
-  ACCESO RESTRINGIDO - EcoSentinel. Uso autorizado unicamente.
-  Toda actividad es registrada (principio de Trazabilidad).
+  SW-EcoSentinel - dispositivo de laboratorio compartido. Sin credenciales
+  configuradas a proposito. Toda actividad es registrada (principio de
+  Trazabilidad).
 #
 
 ! =====================================================================
@@ -206,30 +206,29 @@ interface range GigabitEthernet0/1 - 2
 exit
 
 ! =====================================================================
-! 7. Acceso remoto seguro (SSH v2, sin Telnet) y desactivar HTTP
+! 7. Acceso remoto (SSH v2 -- transporte cifrado, sin Telnet) y desactivar
+!    HTTP. SIN usuario/contrasena: dispositivo compartido, acceso abierto
+!    desde la red de gestion, ya restringida por las VLANs/ACLs de arriba.
 ! =====================================================================
 ! Genera la llave RSA para SSH (1024 bits minimo)
 crypto key generate rsa modulus 1024
 ip ssh version 2
 
-! Usuario local para 'login local'
-username adminsw privilege 15 secret Adm1n$EcoSW
-
 ! Consola
 line console 0
- login local
+ no login
  exec-timeout 5 0
  logging synchronous
 exit
 
-! VTY: solo SSH, autenticacion local
+! VTY: solo SSH, sin autenticacion (dispositivo compartido)
 line vty 0 4
- login local
+ no login
  transport input ssh
  exec-timeout 5 0
 exit
 line vty 5 15
- login local
+ no login
  transport input ssh
 exit
 

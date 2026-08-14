@@ -78,7 +78,7 @@ inter-VLAN y frontera a Internet, y la inspección la realiza la RPi recibiendo 
 
 | Elemento del PDF (sección 2.2 / 3.2) | Control indicado | Dónde se implementa |
 |--------------------------------------|------------------|---------------------|
-| **Módem / Router** | Config segura, credenciales, desactivar servicios | `config-router.txt`: `enable secret`, SSH v2, `no ip http server`, `no cdp run`, `login block-for` |
+| **Módem / Router** | Config segura, desactivar servicios | `config-router.txt`: SSH v2 (transporte cifrado, sin credenciales — dispositivo compartido), `no ip http server`, `no cdp run` |
 | **Switch administrable** | VLANs, control de puertos, aislamiento | `config-switch.txt`: `vlan 10-40`, `port-security`, puertos no usados a VLAN 999 apagados |
 | **Raspberry Pi / EcoSentinel** | Punto de inspección, IDS, registro | Puerto **SPAN** `monitor session 1` → Fa0/10 (RPi) |
 | **Red administrativa** | Acceso restringido, privilegios elevados | VLAN 10 + `ACL-ADMIN` (acceso completo) |
@@ -88,7 +88,7 @@ inter-VLAN y frontera a Internet, y la inspección la realiza la RPi recibiendo 
 | **Segmentación de red** (principio) | Separar admin/usuarios/IoT/invitados | 4 VLANs + subredes /24 independientes |
 | **Mínimo privilegio** (principio) | Solo lo necesario | ACLs deny-first, puertos no usados apagados, `port-security max 1` |
 | **Monitoreo continuo** (principio) | Registro de conexiones y anomalías | SPAN hacia RPi (IDS + modelos IA, doc 3.1) |
-| **Trazabilidad** (principio) | Todo evento documentado | `banner motd`, `login block-for`, `service password-encryption` |
+| **Trazabilidad** (principio) | Todo evento documentado | `banner motd` en router y switch |
 | **"Separar IoT e invitados de la red administrativa"** (regla 3.2) | — | `ACL-IOT` y `ACL-INVITADOS` niegan VLAN 10 |
 | **"Bloquear por defecto conexiones no solicitadas"** (regla 3.2) | — | `deny` explícitos + `deny ip any any` implícito de cada ACL |
 

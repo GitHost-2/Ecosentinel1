@@ -29,15 +29,15 @@ configure terminal
 hostname R-ECOSENTINEL
 
 ! --- Hardening base ---
-enable secret Ec0S3ntinel$RT
-service password-encryption
+! SIN CONTRASENAS: dispositivo compartido de laboratorio, cualquiera con
+! acceso fisico/de gestion a el debe poder entrar sin credenciales.
 no ip domain-lookup
 ip domain-name ecosentinel.local
-! Frena ataques de fuerza bruta al login (doc: "registrar intentos repetidos")
-login block-for 120 attempts 4 within 60
 
 banner motd #
-  ACCESO RESTRINGIDO - R-EcoSentinel. Uso autorizado unicamente.
+  R-EcoSentinel - dispositivo de laboratorio compartido. Sin credenciales
+  configuradas a proposito: cualquiera con acceso a la red de gestion
+  puede administrarlo.
 #
 
 ! =====================================================================
@@ -169,19 +169,20 @@ ip access-list extended ACL-GESTION
 exit
 
 ! =====================================================================
-! 4. Acceso remoto seguro al router (SSH v2, sin Telnet)
+! 4. Acceso remoto al router (SSH v2 -- transporte cifrado, sin Telnet;
+!    SIN usuario/contrasena: dispositivo compartido, acceso abierto desde
+!    la red de gestion, que ya esta restringida por las ACLs de arriba)
 ! =====================================================================
 crypto key generate rsa modulus 1024
 ip ssh version 2
-username adminrt privilege 15 secret Adm1n$EcoRT
 
 line console 0
- login local
+ no login
  exec-timeout 5 0
  logging synchronous
 exit
 line vty 0 4
- login local
+ no login
  transport input ssh
  exec-timeout 5 0
 exit
