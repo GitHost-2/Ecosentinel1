@@ -1,0 +1,244 @@
+! =====================================================================
+! EcoSentinel - Configuracion de SWITCH ADMINISTRABLE (Cisco Catalyst 2960)
+! Alineado con "Arquitectura de red.pdf" (Carpeta 2 - Planificacion Tecnica)
+! Rol del switch (doc, seccion 2.2): "Distribuye la conectividad a los VLAN,
+!   control de puertos y aislamiento entre segmentos internos."
+!
+! Segmentacion (doc, principio "Segmentacion de red"):
+!   VLAN 10 = Red administrativa   192.168.10.0/24
+!   VLAN 20 = Red de usuarios      192.168.20.0/24
+!   VLAN 30 = Red IoT              192.168.30.0/24
+!   VLAN 40 = Red de invitados     192.168.40.0/24
+!   VLAN 99 = Gestion del switch   192.168.99.0/24 (management, out-of-band logico)
+!   VLAN 999 = Blackhole (puertos no usados, sin ruta ni gateway)
+!
+! Punto de inspeccion (doc + README_ECOSENTINEL §7): la RPi en modo managed solo
+!   ve su propio trafico + broadcast. Para que EcoSentinel inspeccione TODO el
+!   trafico inter-VLAN se usa un PUERTO SPAN (mirror) hacia el puerto de la RPi.
+!
+! Aplicable tal cual en Cisco Packet Tracer (2960) o IOS real 15.x.
+! =====================================================================
+
+enable
+configure terminal
+
+! --- Identidad del dispositivo ---
+hostname SW-ECOSENTINEL
+
+! --- Hardening base: credenciales y cifrado de contrasenas ---
+! (doc, seccion 3.2 "Reglas minimas de seguridad": credenciales seguras)
+enable secret Ec0S3ntinel$SW
+service password-encryption
+! Evita que un typo intente resolverse por DNS y cuelgue la consola
+no ip domain-lookup
+ip domain-name ecosentinel.local
+
+! --- Banner legal / trazabilidad ---
+banner motd #
+  ACCESO RESTRINGIDO - EcoSentinel. Uso autorizado unicamente.
+  Toda actividad es registrada (principio de Trazabilidad).
+#
+
+! =====================================================================
+! 1. Definicion de VLANs
+! =====================================================================
+vlan 10
+ name ADMINISTRATIVA
+vlan 20
+ name USUARIOS
+vlan 30
+ name IOT
+vlan 40
+ name INVITADOS
+vlan 99
+ name GESTION
+vlan 999
+ name BLACKHOLE-NO-USAR
+exit
+
+! =====================================================================
+! 2. Interfaz de gestion del switch (SVI en VLAN 99)
+!    Permite SSH de administracion desde la red administrativa.
+! =====================================================================
+interface vlan 99
+ description Gestion-SW-EcoSentinel
+ ip address 192.168.99.2 255.255.255.0
+ no shutdown
+exit
+! Gateway por defecto del switch (subinterfaz .99 del router)
+ip default-gateway 192.168.99.1
+
+! =====================================================================
+! 3. Puerto TRUNK hacia el router (router-on-a-stick)
+!    Transporta las VLANs 10/20/30/40/99. Native VLAN dedicada (no la 1)
+!    para mitigar VLAN hopping.
+! =====================================================================
+interface FastEthernet0/1
+ description TRUNK-hacia-R-ECOSENTINEL
+ switchport mode trunk
+ switchport trunk native vlan 999
+ switchport trunk allowed vlan 10,20,30,40,99
+ switchport nonegotiate
+ no shutdown
+exit
+
+! =====================================================================
+! 4. Puertos de ACCESO: 1 dispositivo de prueba por VLAN
+!    Hardening por puerto (doc: "control de puertos"):
+!      - port-security max 1 con MAC sticky y violation shutdown
+!      - portfast + bpduguard (son puertos de host, nunca deben ver un switch)
+! =====================================================================
+
+! --- VLAN 10: PC-ADMIN (192.168.10.10) ---
+interface FastEthernet0/2
+ description ACCESO-VLAN10-PC-ADMIN
+ switchport mode access
+ switchport access vlan 10
+ switchport port-security
+ switchport port-security maximum 1
+ switchport port-security mac-address sticky
+ switchport port-security violation shutdown
+ spanning-tree portfast
+ spanning-tree bpduguard enable
+ no shutdown
+exit
+
+! --- VLAN 20: PC-USUARIO (192.168.20.20) ---
+interface FastEthernet0/3
+ description ACCESO-VLAN20-PC-USUARIO
+ switchport mode access
+ switchport access vlan 20
+ switchport port-security
+ switchport port-security maximum 1
+ switchport port-security mac-address sticky
+ switchport port-security violation shutdown
+ spanning-tree portfast
+ spanning-tree bpduguard enable
+ no shutdown
+exit
+
+! --- VLAN 30: DISPOSITIVO-IOT (192.168.30.30) ---
+interface FastEthernet0/4
+ description ACCESO-VLAN30-IOT-SENSOR
+ switchport mode access
+ switchport access vlan 30
+ switchport port-security
+ switchport port-security maximum 1
+ switchport port-security mac-address sticky
+ switchport port-security violation shutdown
+ spanning-tree portfast
+ spanning-tree bpduguard enable
+ no shutdown
+exit
+
+! --- VLAN 40: PC-INVITADO (192.168.40.40) ---
+interface FastEthernet0/5
+ description ACCESO-VLAN40-PC-INVITADO
+ switchport mode access
+ switchport access vlan 40
+ switchport port-security
+ switchport port-security maximum 1
+ switchport port-security mac-address sticky
+ switchport port-security violation shutdown
+ spanning-tree portfast
+ spanning-tree bpduguard enable
+ no shutdown
+exit
+
+! =====================================================================
+! 5. PUERTO SPAN / MONITOR hacia la RaspBerry Pi (EcoSentinel)
+!    Decision de diseno (README §7): la RPi en modo managed no ve el trafico
+!    entre terceros. El SPAN replica TODO el trafico de las VLANs de usuario
+!    hacia el puerto de captura de la RPi, habilitando IDS/deteccion de
+!    escaneos entre terceros -> cumple el rol de "punto de inspeccion" del doc.
+!
+!    Fuente: VLANs 10,20,30,40 en ambos sentidos (rx/tx).
+!    Destino: Fa0/10 = puerto de captura de la RPi (interfaz en modo promiscuo).
+!    'encapsulation replicate' conserva el tag 802.1Q para que la RPi sepa
+!    de que VLAN vino cada paquete (soportado en IOS real; en Packet Tracer
+!    puede omitirse la palabra 'replicate' si la version no la acepta).
+! =====================================================================
+monitor session 1 source vlan 10 , 20 , 30 , 40 both
+monitor session 1 destination interface FastEthernet0/10 encapsulation replicate
+
+! Puerto fisico de la RPi (destino SPAN). NOTA: un puerto destino SPAN solo
+! RECIBE trafico espejeado; para la GESTION de la RPi (SSH al panel) se usa
+! una segunda NIC/puerto en la VLAN 99 (ver Fa0/11).
+interface FastEthernet0/10
+ description SPAN-DST-RPI-ECOSENTINEL-captura
+ no shutdown
+exit
+
+! --- Puerto de GESTION de la RPi (panel web / SSH) en VLAN 99 ---
+interface FastEthernet0/11
+ description ACCESO-VLAN99-RPI-ECOSENTINEL-mgmt
+ switchport mode access
+ switchport access vlan 99
+ switchport port-security
+ switchport port-security maximum 1
+ switchport port-security mac-address sticky
+ switchport port-security violation restrict
+ spanning-tree portfast
+ spanning-tree bpduguard enable
+ no shutdown
+exit
+
+! =====================================================================
+! 6. Puertos NO USADOS: apagados y enviados al blackhole (VLAN 999)
+!    (doc, seccion 3.2: "desactivacion de servicios innecesarios" / minimo
+!     privilegio). Rango de ejemplo Fa0/6-9 y Fa0/12-24 + Gig0/1-2.
+! =====================================================================
+interface range FastEthernet0/6 - 9
+ description NO-USADO
+ switchport mode access
+ switchport access vlan 999
+ shutdown
+exit
+interface range FastEthernet0/12 - 24
+ description NO-USADO
+ switchport mode access
+ switchport access vlan 999
+ shutdown
+exit
+interface range GigabitEthernet0/1 - 2
+ description NO-USADO
+ shutdown
+exit
+
+! =====================================================================
+! 7. Acceso remoto seguro (SSH v2, sin Telnet) y desactivar HTTP
+! =====================================================================
+! Genera la llave RSA para SSH (1024 bits minimo)
+crypto key generate rsa modulus 1024
+ip ssh version 2
+
+! Usuario local para 'login local'
+username adminsw privilege 15 secret Adm1n$EcoSW
+
+! Consola
+line console 0
+ login local
+ exec-timeout 5 0
+ logging synchronous
+exit
+
+! VTY: solo SSH, autenticacion local
+line vty 0 4
+ login local
+ transport input ssh
+ exec-timeout 5 0
+exit
+line vty 5 15
+ login local
+ transport input ssh
+exit
+
+! Desactivar servicios innecesarios (superficie de ataque)
+no ip http server
+no ip http secure-server
+
+! =====================================================================
+! Fin de configuracion. Guardar.
+! =====================================================================
+end
+write memory

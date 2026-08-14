@@ -1,0 +1,267 @@
+========================================================================
+EcoSentinel - Topologia completa (Arquitectura de red.pdf - Carpeta 2)
+Un solo archivo - configuracion por dispositivo separada por seccion
+SIN CONTRASENAS NI AUTENTICACION - solo VLANs, enrutamiento y DHCP relay
+
+VLAN10 admin 192.168.10.0/24 | VLAN20 usuarios .20.0/24 | VLAN30 IoT .30.0/24
+VLAN40 invitados .40.0/24 | VLAN99 gestion .99.0/24 | VLAN999 blackhole
+Servidor DHCP 192.168.99.10 (laptop Kali - ver dhcp-server-ecosentinel.sh)
+========================================================================
+
+
+========================= ROUTER R-ECOSENTINEL =========================
+enable
+configure terminal
+hostname R-ECOSENTINEL
+no ip domain-lookup
+interface GigabitEthernet0/0
+ description WAN-hacia-MODEM-ISP
+ ip address 203.0.113.1 255.255.255.252
+ no shutdown
+exit
+ip route 0.0.0.0 0.0.0.0 203.0.113.2
+interface GigabitEthernet0/1
+ description TRUNK-hacia-SW-ECOSENTINEL
+ no ip address
+ no shutdown
+exit
+interface GigabitEthernet0/1.10
+ encapsulation dot1Q 10
+ ip address 192.168.10.1 255.255.255.0
+ ip helper-address 192.168.99.10
+ ip access-group ACL-ADMIN in
+exit
+interface GigabitEthernet0/1.20
+ encapsulation dot1Q 20
+ ip address 192.168.20.1 255.255.255.0
+ ip helper-address 192.168.99.10
+ ip access-group ACL-USUARIOS in
+exit
+interface GigabitEthernet0/1.30
+ encapsulation dot1Q 30
+ ip address 192.168.30.1 255.255.255.0
+ ip helper-address 192.168.99.10
+ ip access-group ACL-IOT in
+exit
+interface GigabitEthernet0/1.40
+ encapsulation dot1Q 40
+ ip address 192.168.40.1 255.255.255.0
+ ip helper-address 192.168.99.10
+ ip access-group ACL-INVITADOS in
+exit
+interface GigabitEthernet0/1.99
+ encapsulation dot1Q 99
+ ip address 192.168.99.1 255.255.255.0
+exit
+ip access-list extended ACL-ADMIN
+ permit ip 192.168.10.0 0.0.0.255 any
+exit
+ip access-list extended ACL-USUARIOS
+ permit udp 192.168.20.0 0.0.0.255 host 192.168.99.10 eq bootps
+ deny   ip 192.168.20.0 0.0.0.255 192.168.10.0 0.0.0.255
+ deny   ip 192.168.20.0 0.0.0.255 192.168.99.0 0.0.0.255
+ permit ip 192.168.20.0 0.0.0.255 any
+exit
+ip access-list extended ACL-IOT
+ permit udp 192.168.30.0 0.0.0.255 host 192.168.99.10 eq bootps
+ deny   ip 192.168.30.0 0.0.0.255 192.168.10.0 0.0.0.255
+ deny   ip 192.168.30.0 0.0.0.255 192.168.20.0 0.0.0.255
+ deny   ip 192.168.30.0 0.0.0.255 192.168.40.0 0.0.0.255
+ deny   ip 192.168.30.0 0.0.0.255 192.168.99.0 0.0.0.255
+ permit ip 192.168.30.0 0.0.0.255 any
+exit
+ip access-list extended ACL-INVITADOS
+ permit udp 192.168.40.0 0.0.0.255 host 192.168.99.10 eq bootps
+ deny   ip 192.168.40.0 0.0.0.255 192.168.10.0 0.0.0.255
+ deny   ip 192.168.40.0 0.0.0.255 192.168.20.0 0.0.0.255
+ deny   ip 192.168.40.0 0.0.0.255 192.168.30.0 0.0.0.255
+ deny   ip 192.168.40.0 0.0.0.255 192.168.99.0 0.0.0.255
+ permit ip 192.168.40.0 0.0.0.255 any
+exit
+end
+write memory
+
+
+========================= SWITCH SW-ECOSENTINEL =========================
+enable
+configure terminal
+hostname SW-ECOSENTINEL
+no ip domain-lookup
+vlan 10
+ name ADMINISTRATIVA
+vlan 20
+ name USUARIOS
+vlan 30
+ name IOT
+vlan 40
+ name INVITADOS
+vlan 99
+ name GESTION
+vlan 999
+ name BLACKHOLE-NO-USAR
+exit
+interface vlan 99
+ ip address 192.168.99.2 255.255.255.0
+ no shutdown
+exit
+ip default-gateway 192.168.99.1
+interface FastEthernet0/1
+ description TRUNK-hacia-R-ECOSENTINEL
+ switchport mode trunk
+ switchport trunk native vlan 999
+ switchport trunk allowed vlan 10,20,30,40,99
+ switchport nonegotiate
+ no shutdown
+exit
+interface FastEthernet0/2
+ description PC-ADMIN-VLAN10
+ switchport mode access
+ switchport access vlan 10
+ spanning-tree portfast
+ no shutdown
+exit
+interface FastEthernet0/3
+ description PC-USUARIO-VLAN20
+ switchport mode access
+ switchport access vlan 20
+ spanning-tree portfast
+ no shutdown
+exit
+interface FastEthernet0/4
+ description DISPOSITIVO-IOT-VLAN30
+ switchport mode access
+ switchport access vlan 30
+ spanning-tree portfast
+ no shutdown
+exit
+interface FastEthernet0/5
+ description PC-INVITADO-VLAN40
+ switchport mode access
+ switchport access vlan 40
+ spanning-tree portfast
+ no shutdown
+exit
+interface FastEthernet0/6
+ description SERVIDOR-DHCP-LAPTOP-VLAN99
+ switchport mode access
+ switchport access vlan 99
+ spanning-tree portfast
+ no shutdown
+exit
+monitor session 1 source vlan 10 , 20 , 30 , 40 both
+monitor session 1 destination interface FastEthernet0/10 encapsulation replicate
+interface FastEthernet0/10
+ description SPAN-DST-RPI-ECOSENTINEL-captura
+ no shutdown
+exit
+interface FastEthernet0/11
+ description RPI-ECOSENTINEL-mgmt-VLAN99
+ switchport mode access
+ switchport access vlan 99
+ spanning-tree portfast
+ no shutdown
+exit
+interface range FastEthernet0/7 - 9
+ switchport mode access
+ switchport access vlan 999
+ shutdown
+exit
+interface range FastEthernet0/12 - 24
+ switchport mode access
+ switchport access vlan 999
+ shutdown
+exit
+interface range GigabitEthernet0/1 - 2
+ shutdown
+exit
+end
+write memory
+
+
+============== SERVIDOR DHCP - LAPTOP KALI (192.168.99.10) ==============
+Conexion fisica: cable de la laptop al puerto Fa0/6 del switch (VLAN 99)
+Automatizado con:  sudo ./dhcp-server-ecosentinel.sh start eth0
+El script fija la IP estatica, instala isc-dhcp-server y crea los 4 pools.
+El router entrega las peticiones de cada VLAN por ip helper-address.
+
+Equivalente en Packet Tracer (dispositivo Server en Fa0/6):
+Config > FastEthernet0 > IP Configuration (Static):
+ IP Address       192.168.99.10
+ Subnet Mask      255.255.255.0
+ Default Gateway  192.168.99.1
+ DNS Server       8.8.8.8
+Services > DHCP > Service: On
+
+Pool VLAN10-ADMIN
+ Default Gateway  192.168.10.1
+ DNS Server       8.8.8.8
+ Start IP Address 192.168.10.100
+ Subnet Mask      255.255.255.0
+ Maximum Users    50
+
+Pool VLAN20-USUARIOS
+ Default Gateway  192.168.20.1
+ DNS Server       8.8.8.8
+ Start IP Address 192.168.20.100
+ Subnet Mask      255.255.255.0
+ Maximum Users    50
+
+Pool VLAN30-IOT
+ Default Gateway  192.168.30.1
+ DNS Server       8.8.8.8
+ Start IP Address 192.168.30.100
+ Subnet Mask      255.255.255.0
+ Maximum Users    50
+
+Pool VLAN40-INVITADOS
+ Default Gateway  192.168.40.1
+ DNS Server       8.8.8.8
+ Start IP Address 192.168.40.100
+ Subnet Mask      255.255.255.0
+ Maximum Users    50
+
+
+========================= PC-ADMIN (VLAN 10) =========================
+Dispositivo: PC en Fa0/2 del switch, VLAN 10
+Desktop > IP Configuration: DHCP
+ IP esperada      192.168.10.100
+ Subnet Mask      255.255.255.0
+ Default Gateway  192.168.10.1
+ DNS Server       8.8.8.8
+
+
+======================== PC-USUARIO (VLAN 20) ========================
+Dispositivo: PC en Fa0/3 del switch, VLAN 20
+Desktop > IP Configuration: DHCP
+ IP esperada      192.168.20.100
+ Subnet Mask      255.255.255.0
+ Default Gateway  192.168.20.1
+ DNS Server       8.8.8.8
+
+
+====================== DISPOSITIVO-IOT (VLAN 30) ======================
+Dispositivo: PC/IoT en Fa0/4 del switch, VLAN 30
+Desktop > IP Configuration: DHCP
+ IP esperada      192.168.30.100
+ Subnet Mask      255.255.255.0
+ Default Gateway  192.168.30.1
+ DNS Server       8.8.8.8
+
+
+======================= PC-INVITADO (VLAN 40) =======================
+Dispositivo: PC en Fa0/5 del switch, VLAN 40
+Desktop > IP Configuration: DHCP
+ IP esperada      192.168.40.100
+ Subnet Mask      255.255.255.0
+ Default Gateway  192.168.40.1
+ DNS Server       8.8.8.8
+
+
+=================== RASPBERRY PI ECOSENTINEL (VLAN 99) ===================
+Puerto de captura: Fa0/10 del switch (destino SPAN, modo promiscuo, sin IP)
+Puerto de gestion: Fa0/11 del switch, VLAN 99
+Config gestion (Static):
+ IP Address       192.168.99.20
+ Subnet Mask      255.255.255.0
+ Default Gateway  192.168.99.1
+ DNS Server       8.8.8.8

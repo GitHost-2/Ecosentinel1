@@ -1,0 +1,203 @@
+! =====================================================================
+! EcoSentinel - Configuracion de ROUTER (Cisco 2911) - Router-on-a-stick
+! Alineado con "Arquitectura de red.pdf" (Carpeta 2 - Planificacion Tecnica)
+!
+! Funcion: enrutamiento inter-VLAN + APLICACION DE CONTROLES POR SEGMENTO
+!   mediante ACLs, implementando las "Reglas minimas de seguridad" (doc 3.2):
+!     - "Separar los dispositivos IoT y de invitados de la red administrativa."
+!     - Red de invitados: "Solo salida a Internet, sin acceso a recursos internos."
+!     - Red IoT: "Aislamiento y bloqueo del acceso directo a areas criticas."
+!     - Red administrativa: "Acceso restringido, ... privilegios elevados."
+!
+! Topologia logica del doc (seccion 2.1):
+!   Internet -> Modem/Router -> [EcoSentinel/RPi punto inspeccion] -> Switch -> VLANs
+!   En este laboratorio el router 2911 hace de gateway inter-VLAN y frontera hacia
+!   Internet; la inspeccion la realiza la RPi via SPAN en el switch (ver README).
+!
+! Direccionamiento (una subred /24 por VLAN):
+!   VLAN 10 admin      192.168.10.0/24  gw .1
+!   VLAN 20 usuarios   192.168.20.0/24  gw .1
+!   VLAN 30 IoT        192.168.30.0/24  gw .1
+!   VLAN 40 invitados  192.168.40.0/24  gw .1
+!   VLAN 99 gestion    192.168.99.0/24  gw .1
+!   WAN/Internet       203.0.113.0/30 (ejemplo, .2 = ISP simulado)
+! =====================================================================
+
+enable
+configure terminal
+
+hostname R-ECOSENTINEL
+
+! --- Hardening base ---
+enable secret Ec0S3ntinel$RT
+service password-encryption
+no ip domain-lookup
+ip domain-name ecosentinel.local
+! Frena ataques de fuerza bruta al login (doc: "registrar intentos repetidos")
+login block-for 120 attempts 4 within 60
+
+banner motd #
+  ACCESO RESTRINGIDO - R-EcoSentinel. Uso autorizado unicamente.
+#
+
+! =====================================================================
+! 1. Interfaz WAN hacia el modem/ISP (salida a Internet)
+! =====================================================================
+interface GigabitEthernet0/0
+ description WAN-hacia-MODEM-ISP
+ ip address 203.0.113.1 255.255.255.252
+ no shutdown
+exit
+
+! Ruta por defecto hacia Internet (ISP simulado en .2)
+ip route 0.0.0.0 0.0.0.0 203.0.113.2
+
+! =====================================================================
+! 2. Interfaz LAN fisica hacia el switch (troncal 802.1Q)
+!    Se subdivide en subinterfaces, una por VLAN (router-on-a-stick).
+! =====================================================================
+interface GigabitEthernet0/1
+ description TRUNK-hacia-SW-ECOSENTINEL
+ no ip address
+ no shutdown
+exit
+
+! --- VLAN 10: Red administrativa (gateway .1) ---
+interface GigabitEthernet0/1.10
+ description GW-VLAN10-ADMIN
+ encapsulation dot1Q 10
+ ip address 192.168.10.1 255.255.255.0
+ ip access-group ACL-ADMIN in
+exit
+
+! --- VLAN 20: Red de usuarios (gateway .1) ---
+interface GigabitEthernet0/1.20
+ description GW-VLAN20-USUARIOS
+ encapsulation dot1Q 20
+ ip address 192.168.20.1 255.255.255.0
+ ip access-group ACL-USUARIOS in
+exit
+
+! --- VLAN 30: Red IoT (gateway .1) ---
+interface GigabitEthernet0/1.30
+ description GW-VLAN30-IOT
+ encapsulation dot1Q 30
+ ip address 192.168.30.1 255.255.255.0
+ ip access-group ACL-IOT in
+exit
+
+! --- VLAN 40: Red de invitados (gateway .1) ---
+interface GigabitEthernet0/1.40
+ description GW-VLAN40-INVITADOS
+ encapsulation dot1Q 40
+ ip address 192.168.40.1 255.255.255.0
+ ip access-group ACL-INVITADOS in
+exit
+
+! --- VLAN 99: Gestion (gateway .1) ---
+interface GigabitEthernet0/1.99
+ description GW-VLAN99-GESTION
+ encapsulation dot1Q 99
+ ip address 192.168.99.1 255.255.255.0
+ ip access-group ACL-GESTION in
+exit
+
+! =====================================================================
+! 3. ACLs de segmentacion  (se aplican INBOUND en cada subinterfaz, es
+!    decir filtran el trafico que SALE de cada VLAN hacia el resto).
+!    Convencion: primero se NIEGA lo prohibido, al final se PERMITE el resto
+!    (Internet). El 'deny ip any any' implicito no se alcanza porque cada
+!    ACL termina en 'permit ip ... any' para dejar salir a Internet.
+! =====================================================================
+
+! ---------- 3.1 ACL-ADMIN (VLAN 10) ----------
+! Red administrativa = privilegios elevados: acceso total a todo + Internet.
+ip access-list extended ACL-ADMIN
+ remark Admin tiene acceso completo (privilegios elevados)
+ permit ip 192.168.10.0 0.0.0.255 any
+exit
+
+! ---------- 3.2 ACL-USUARIOS (VLAN 20) ----------
+! Usuarios: pueden salir a Internet y alcanzar IoT (control de sensores) e
+! invitados, pero NO la red administrativa ni la gestion del switch.
+ip access-list extended ACL-USUARIOS
+ remark Bloquear acceso de usuarios a la red administrativa
+ deny   ip 192.168.20.0 0.0.0.255 192.168.10.0 0.0.0.255
+ remark Bloquear acceso de usuarios a la gestion (switch/RPi mgmt)
+ deny   ip 192.168.20.0 0.0.0.255 192.168.99.0 0.0.0.255
+ remark Permitir el resto: IoT, invitados e Internet
+ permit ip 192.168.20.0 0.0.0.255 any
+exit
+
+! ---------- 3.3 ACL-IOT (VLAN 30) ----------
+! IoT aislado de TODA area interna (admin, usuarios, invitados, gestion).
+! Solo se permite salida a Internet (telemetria/actualizaciones).
+ip access-list extended ACL-IOT
+ remark IoT aislado de la red administrativa (area critica)
+ deny   ip 192.168.30.0 0.0.0.255 192.168.10.0 0.0.0.255
+ remark IoT aislado de la red de usuarios
+ deny   ip 192.168.30.0 0.0.0.255 192.168.20.0 0.0.0.255
+ remark IoT aislado de la red de invitados
+ deny   ip 192.168.30.0 0.0.0.255 192.168.40.0 0.0.0.255
+ remark IoT aislado de la gestion
+ deny   ip 192.168.30.0 0.0.0.255 192.168.99.0 0.0.0.255
+ remark Solo salida a Internet
+ permit ip 192.168.30.0 0.0.0.255 any
+exit
+
+! ---------- 3.4 ACL-INVITADOS (VLAN 40) ----------
+! Invitados: SOLO salida a Internet, sin acceso a NINGUN recurso interno.
+ip access-list extended ACL-INVITADOS
+ remark Invitados sin acceso a la red administrativa
+ deny   ip 192.168.40.0 0.0.0.255 192.168.10.0 0.0.0.255
+ remark Invitados sin acceso a la red de usuarios
+ deny   ip 192.168.40.0 0.0.0.255 192.168.20.0 0.0.0.255
+ remark Invitados sin acceso a la red IoT
+ deny   ip 192.168.40.0 0.0.0.255 192.168.30.0 0.0.0.255
+ remark Invitados sin acceso a la gestion
+ deny   ip 192.168.40.0 0.0.0.255 192.168.99.0 0.0.0.255
+ remark Solo salida a Internet
+ permit ip 192.168.40.0 0.0.0.255 any
+exit
+
+! ---------- 3.5 ACL-GESTION (VLAN 99) ----------
+! Gestion (switch mgmt + panel RPi): puede alcanzar todo para administrar.
+! Su acceso desde otras VLANs ya esta bloqueado por las ACLs anteriores.
+ip access-list extended ACL-GESTION
+ remark Gestion con acceso administrativo completo
+ permit ip 192.168.99.0 0.0.0.255 any
+exit
+
+! =====================================================================
+! 4. Acceso remoto seguro al router (SSH v2, sin Telnet)
+! =====================================================================
+crypto key generate rsa modulus 1024
+ip ssh version 2
+username adminrt privilege 15 secret Adm1n$EcoRT
+
+line console 0
+ login local
+ exec-timeout 5 0
+ logging synchronous
+exit
+line vty 0 4
+ login local
+ transport input ssh
+ exec-timeout 5 0
+exit
+
+! Desactivar servicios innecesarios
+no ip http server
+no ip http secure-server
+no cdp run
+
+! =====================================================================
+! NOTA sobre Internet e inspeccion:
+!   - En este diseno el 'permit ip ... any' final deja salir cada VLAN a
+!     Internet a traves de la ruta por defecto (0.0.0.0/0).
+!   - En un despliegue real la RPi EcoSentinel (via SPAN en el switch) inspecciona
+!     ese trafico y, ante una amenaza, notifica para bloqueo en este router
+!     (la RPi en modo managed NO corta trafico por si sola; ver README §7).
+! =====================================================================
+end
+write memory
