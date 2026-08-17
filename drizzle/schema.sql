@@ -9,9 +9,9 @@
 -- Todo es idempotente (`IF NOT EXISTS` + el `DO $$ ... duplicate_object` de las
 -- FK), así que correrlo dos veces no rompe nada.
 --
--- Corresponde a `db/schema.ts` con las 9 tablas al día: users, devices,
+-- Corresponde a `db/schema.ts` con las 10 tablas al día: users, devices,
 -- detections, alert_log, mitigations, rate_limit_counters, device_heartbeats,
--- isolation_orders y password_reset_tokens.
+-- isolation_orders, password_reset_tokens y device_owners.
 --
 -- Verificado el 2026-08-16 aplicándolo a una base vacía y comparando columnas e
 -- índices contra la base de pruebas real (ver tests/db-local.ts).
@@ -238,3 +238,39 @@ END $$;
 
 CREATE UNIQUE INDEX IF NOT EXISTS "password_reset_tokens_token_hash_idx" ON "password_reset_tokens" USING btree ("token_hash");
 CREATE INDEX IF NOT EXISTS "password_reset_tokens_user_id_idx" ON "password_reset_tokens" USING btree ("user_id");
+
+-- ─────────────────────────────────────────────────────────────
+-- device_owners — coautoría de dispositivos (migración 0011).
+-- El dispositivo de demo es compartido: cualquier cuenta ve y opera
+-- cualquier dispositivo listado aquí, no solo `devices.owner_user_id`
+-- (que se conserva solo como "quién lo dio de alta").
+-- ─────────────────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS "device_owners" (
+	"device_id" integer NOT NULL,
+	"user_id" integer NOT NULL,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	CONSTRAINT "device_owners_device_id_user_id_pk" PRIMARY KEY("device_id","user_id")
+);
+
+DO $$ BEGIN
+ ALTER TABLE "device_owners" ADD CONSTRAINT "device_owners_device_id_devices_id_fk" FOREIGN KEY ("device_id") REFERENCES "public"."devices"("id") ON DELETE cascade ON UPDATE no action;
+EXCEPTION
+ WHEN duplicate_object THEN null;
+END $$;
+
+DO $$ BEGIN
+ ALTER TABLE "device_owners" ADD CONSTRAINT "device_owners_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;
+EXCEPTION
+ WHEN duplicate_object THEN null;
+END $$;
+
+CREATE INDEX IF NOT EXISTS "device_owners_user_id_idx" ON "device_owners" USING btree ("user_id");
+
+-- Backfill: dueño original + todo usuario ya existente, coautores de todo.
+INSERT INTO "device_owners" ("device_id", "user_id")
+SELECT "id", "owner_user_id" FROM "devices" WHERE "owner_user_id" IS NOT NULL
+ON CONFLICT DO NOTHING;
+
+INSERT INTO "device_owners" ("device_id", "user_id")
+SELECT d."id", u."id" FROM "devices" d CROSS JOIN "users" u
+ON CONFLICT DO NOTHING;

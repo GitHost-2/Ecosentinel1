@@ -167,6 +167,31 @@ export const isolationOrders = pgTable("isolation_orders", {
   index("isolation_orders_device_applied_idx").on(table.deviceId, table.applied),
 ]);
 
+// Coautoría de dispositivos: quién más allá del dueño original puede ver y
+// operar un dispositivo. Antes `devices.ownerUserId` era la única fuente de
+// verdad (un dispositivo, un dueño); esta tabla lo vuelve muchos-a-muchos.
+//
+// Decisión de negocio (no un bug): el proyecto pasó de "un dispositivo por
+// cliente" a "el dispositivo de demo es compartido" -- cualquier cuenta
+// nueva que se registra queda coautora de TODOS los dispositivos existentes
+// (ver app/api/auth/register/route.ts), con las mismas acciones que el dueño
+// original (ver, aislar IP, liberar). `devices.ownerUserId` se conserva como
+// "dueño original" (quién lo dio de alta, db/create-device.ts) pero ya NO es
+// lo que decide visibilidad ni permisos -- eso lo hace esta tabla.
+export const deviceOwners = pgTable("device_owners", {
+  deviceId: integer("device_id")
+    .notNull()
+    .references(() => devices.id, { onDelete: "cascade" }),
+  userId: integer("user_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [
+  primaryKey({ columns: [table.deviceId, table.userId] }),
+  // Para "a qué dispositivos tiene acceso este usuario" (resolveVisibleDevices).
+  index("device_owners_user_id_idx").on(table.userId),
+]);
+
 export const passwordResetTokens = pgTable("password_reset_tokens", {
   id: serial("id").primaryKey(),
   userId: integer("user_id")

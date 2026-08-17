@@ -6,7 +6,7 @@
 import "dotenv/config";
 import { eq } from "drizzle-orm";
 import { db } from "./index";
-import { devices, users } from "./schema";
+import { devices, users, deviceOwners } from "./schema";
 import { generateApiKey } from "../lib/device-auth";
 
 function argValue(flag: string, fallback: string) {
@@ -35,6 +35,18 @@ async function main() {
     .insert(devices)
     .values({ nombreCliente, apiKeyHash: hash, plan, ownerUserId })
     .returning({ id: devices.id, nombreCliente: devices.nombreCliente });
+
+  // Coautoría (ver db/schema.ts, deviceOwners): el dispositivo de demo es
+  // compartido, así que TODA cuenta ya registrada queda coautora del
+  // dispositivo nuevo también -- simétrico con lo que hace el registro para
+  // dispositivos ya existentes (app/api/auth/register/route.ts).
+  const todosLosUsuarios = await db.select({ id: users.id }).from(users);
+  if (todosLosUsuarios.length > 0) {
+    await db
+      .insert(deviceOwners)
+      .values(todosLosUsuarios.map((u) => ({ deviceId: device.id, userId: u.id })))
+      .onConflictDoNothing();
+  }
 
   console.log("Dispositivo creado:");
   console.log(`  id: ${device.id}`);

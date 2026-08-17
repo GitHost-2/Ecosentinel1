@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { eq, and, sql } from "drizzle-orm";
 import { db } from "@/db";
-import { detections, devices, isolationOrders } from "@/db/schema";
+import { detections, devices, deviceOwners, isolationOrders } from "@/db/schema";
 import { getSessionUserId } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
@@ -28,7 +28,8 @@ export async function POST(request: Request) {
     .select({ detection: detections })
     .from(detections)
     .innerJoin(devices, eq(devices.id, detections.deviceId))
-    .where(and(eq(detections.id, detectionId), eq(devices.ownerUserId, userId)))
+    .innerJoin(deviceOwners, and(eq(deviceOwners.deviceId, devices.id), eq(deviceOwners.userId, userId)))
+    .where(eq(detections.id, detectionId))
     .limit(1);
   const detection = row?.detection;
   if (!detection) {

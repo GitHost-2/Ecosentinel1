@@ -1,6 +1,6 @@
 import { eq, and, desc } from "drizzle-orm";
 import { db } from "@/db";
-import { devices, users, alertLog } from "@/db/schema";
+import { devices, deviceOwners, users, alertLog } from "@/db/schema";
 import { sendAttackAlertEmail } from "@/lib/email";
 import { sendAttackAlertWhatsapp } from "@/lib/whatsapp";
 
@@ -80,66 +80,87 @@ async function registrarIntento(
   }
 }
 
-/** Manda alerta por correo y/o whatsapp al dueño del dispositivo, respetando el cooldown de cada canal. Nunca lanza. */
+/**
+ * Manda alerta por correo y/o whatsapp a TODOS los coautores del dispositivo
+ * (`deviceOwners`, ver db/schema.ts -- ya no es un único dueño), respetando
+ * el cooldown de cada canal. El cooldown es POR DISPOSITIVO Y CANAL, no por
+ * destinatario: con varios coautores, se comprueba una sola vez por canal y,
+ * si no está en cooldown, se manda a todos en esa ronda -- así N coautores
+ * no multiplican por N las llamadas al proveedor. Nunca lanza.
+ */
 export async function maybeSendAttackAlert(params: AlertParams) {
   try {
     const [device] = await db.select().from(devices).where(eq(devices.id, params.deviceId)).limit(1);
-    if (!device || !device.ownerUserId) {
-      return; // sin dueño asignado, no hay a quién avisar
-    }
+    if (!device) return;
 
-    const [owner] = await db
+    const owners = await db
       .select({ email: users.email, phone: users.phone })
-      .from(users)
-      .where(eq(users.id, device.ownerUserId))
-      .limit(1);
-    if (!owner) return;
+      .from(deviceOwners)
+      .innerJoin(users, eq(users.id, deviceOwners.userId))
+      .where(eq(deviceOwners.deviceId, params.deviceId));
+    if (owners.length === 0) return; // sin coautores, no hay a quién avisar
 
     await Promise.all([
-      sendEmailAlert(device.nombreCliente, owner.email, params),
-      owner.phone ? sendWhatsappAlert(device.nombreCliente, owner.phone, params) : Promise.resolve(),
+      sendEmailAlert(device.nombreCliente, owners.map((o) => o.email), params),
+      sendWhatsappAlert(
+        device.nombreCliente,
+        owners.map((o) => o.phone).filter((p): p is string => !!p),
+        params,
+      ),
     ]);
   } catch (err) {
     console.error(`[alerts] fallo al procesar alerta. deviceId=${params.deviceId}:`, err);
   }
 }
 
-async function sendEmailAlert(deviceName: string, email: string, params: AlertParams) {
+async function sendEmailAlert(deviceName: string, emails: string[], params: AlertParams) {
+  if (emails.length === 0) return;
   if (await wasAlertedRecently(params.deviceId, "email")) return; // dentro del cooldown
 
-  const result = await sendAttackAlertEmail({
-    to: email,
-    deviceName,
-    attackType: params.attackType,
-    attackProb: params.attackProb,
-    protocol: params.protocol,
-    dstPort: params.dstPort,
-    timestamp: params.timestamp,
-  });
+  await Promise.all(
+    emails.map(async (email) => {
+      const result = await sendAttackAlertEmail({
+        to: email,
+        deviceName,
+        attackType: params.attackType,
+        attackProb: params.attackProb,
+        protocol: params.protocol,
+        dstPort: params.dstPort,
+        timestamp: params.timestamp,
+      });
 
-  // Se registra SIEMPRE, también el fallo: si no, un canal averiado no tendría
-  // cooldown y se reintentaría en cada detección.
-  await registrarIntento(params, "email", email, result.ok ? "sent" : "failed");
-  if (!result.ok) {
-    console.error(`[alerts] fallo al enviar correo. deviceId=${params.deviceId} owner=${email}:`, result.error);
-  }
+      // Se registra SIEMPRE, también el fallo: si no, un canal averiado no
+      // tendría cooldown y se reintentaría en cada detección. Se registra por
+      // destinatario: si uno de varios coautores tiene el correo mal, no debe
+      // silenciar la alerta de los demás en la próxima detección.
+      await registrarIntento(params, "email", email, result.ok ? "sent" : "failed");
+      if (!result.ok) {
+        console.error(`[alerts] fallo al enviar correo. deviceId=${params.deviceId} to=${email}:`, result.error);
+      }
+    }),
+  );
 }
 
-async function sendWhatsappAlert(deviceName: string, phone: string, params: AlertParams) {
+async function sendWhatsappAlert(deviceName: string, phones: string[], params: AlertParams) {
+  if (phones.length === 0) return; // ningún coautor puso teléfono
   if (await wasAlertedRecently(params.deviceId, "whatsapp")) return; // dentro del cooldown
 
-  const result = await sendAttackAlertWhatsapp({
-    to: phone,
-    deviceName,
-    attackType: params.attackType,
-    attackProb: params.attackProb,
-    protocol: params.protocol,
-    dstPort: params.dstPort,
-    timestamp: params.timestamp,
-  });
+  await Promise.all(
+    phones.map(async (phone) => {
+      const result = await sendAttackAlertWhatsapp({
+        to: phone,
+        deviceName,
+        attackType: params.attackType,
+        attackProb: params.attackProb,
+        protocol: params.protocol,
+        dstPort: params.dstPort,
+        timestamp: params.timestamp,
+      });
 
-  await registrarIntento(params, "whatsapp", phone, result.ok ? "sent" : "failed");
-  if (!result.ok) {
-    console.error(`[alerts] fallo al enviar whatsapp. deviceId=${params.deviceId} owner=${phone}:`, result.error);
-  }
+      await registrarIntento(params, "whatsapp", phone, result.ok ? "sent" : "failed");
+      if (!result.ok) {
+        console.error(`[alerts] fallo al enviar whatsapp. deviceId=${params.deviceId} to=${phone}:`, result.error);
+      }
+    }),
+  );
 }

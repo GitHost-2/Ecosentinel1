@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
 import { eq } from "drizzle-orm";
 import { db } from "@/db";
-import { users } from "@/db/schema";
+import { users, devices, deviceOwners } from "@/db/schema";
 import { createSessionToken, sessionCookieHeader } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
@@ -32,6 +32,23 @@ export async function POST(request: Request) {
     .insert(users)
     .values({ company, email, plan, passwordHash })
     .returning({ id: users.id, company: users.company, email: users.email, plan: users.plan, profile: users.profile });
+
+  // Decisión de negocio: el dispositivo de demo es compartido (ver
+  // db/schema.ts, deviceOwners). Toda cuenta nueva queda coautora de TODOS
+  // los dispositivos existentes, con las mismas acciones que cualquier otro
+  // coautor -- ver, aislar IP, liberar. Best-effort: si esto falla, la cuenta
+  // igual queda creada (solo verá el dashboard vacío hasta que se repare).
+  try {
+    const todos = await db.select({ id: devices.id }).from(devices);
+    if (todos.length > 0) {
+      await db
+        .insert(deviceOwners)
+        .values(todos.map((d) => ({ deviceId: d.id, userId: user.id })))
+        .onConflictDoNothing();
+    }
+  } catch (err) {
+    console.error(`[register] no se pudo asignar coautoría de dispositivos a userId=${user.id}:`, err);
+  }
 
   const res = NextResponse.json(user, { status: 201 });
   res.headers.set("Set-Cookie", sessionCookieHeader(createSessionToken(user.id)));

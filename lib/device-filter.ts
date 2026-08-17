@@ -1,6 +1,6 @@
 import { eq, inArray } from "drizzle-orm";
 import { db } from "@/db";
-import { devices } from "@/db/schema";
+import { devices, deviceOwners } from "@/db/schema";
 import { getSessionUserId } from "@/lib/session";
 
 /** Lee `?deviceId=` de una request de la API de lectura del dashboard. */
@@ -31,10 +31,14 @@ export async function resolveVisibleDevices(request: Request): Promise<
   const userId = getSessionUserId(request);
   if (!userId) return { ok: false, status: 401 };
 
+  // `deviceOwners` es muchos-a-muchos: no solo el dueño original
+  // (`devices.ownerUserId`) ve un dispositivo, sino cualquier coautor -- ver
+  // el comentario en db/schema.ts.
   const owned = await db
     .select({ id: devices.id })
     .from(devices)
-    .where(eq(devices.ownerUserId, userId));
+    .innerJoin(deviceOwners, eq(deviceOwners.deviceId, devices.id))
+    .where(eq(deviceOwners.userId, userId));
   const ownedIds = owned.map((d) => d.id);
 
   const requested = parseDeviceIdParam(request);

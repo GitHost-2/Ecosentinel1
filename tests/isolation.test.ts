@@ -36,6 +36,9 @@ before(async () => {
 
   await pool.query("delete from isolation_orders");
   await pool.query("delete from detections where src_ip_hash like 'test-iso-%'");
+  await pool.query(
+    "delete from device_owners where device_id in (select id from devices where api_key_hash like 'test-iso-%')",
+  );
   await pool.query("delete from devices where api_key_hash like 'test-iso-%'");
   await pool.query("delete from users where email like 'test-iso-%'");
 
@@ -63,6 +66,11 @@ before(async () => {
   );
   deviceAnaId = devAna.rows[0].id;
   deviceBetoId = devBeto.rows[0].id;
+
+  // Coautoría (ver db/schema.ts, deviceOwners): cada quien coautor solo de
+  // su propio dispositivo -- es lo que valida el scoping por dueño/dispositivo.
+  await pool.query("insert into device_owners (device_id,user_id) values ($1,$2)", [deviceAnaId, anaId]);
+  await pool.query("insert into device_owners (device_id,user_id) values ($1,$2)", [deviceBetoId, betoId]);
 });
 
 after(async () => {

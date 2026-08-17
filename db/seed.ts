@@ -6,7 +6,7 @@
  */
 import "dotenv/config";
 import { db } from "./index";
-import { devices, detections, deviceHeartbeats } from "./schema";
+import { devices, detections, deviceHeartbeats, users, deviceOwners } from "./schema";
 
 const ATTACK_PROFILES = [
   { type: "Ransomware", weight: 22, protocol: "TCP", ports: [445, 3389] },
@@ -49,6 +49,16 @@ async function main() {
       plan: "Pro",
     })
     .returning();
+
+  // Coautoría (ver db/schema.ts, deviceOwners): todo usuario ya registrado
+  // en esta base queda con acceso al dispositivo de demo recién creado.
+  const todosLosUsuarios = await db.select({ id: users.id }).from(users);
+  if (todosLosUsuarios.length > 0) {
+    await db
+      .insert(deviceOwners)
+      .values(todosLosUsuarios.map((u) => ({ deviceId: device.id, userId: u.id })))
+      .onConflictDoNothing();
+  }
 
   console.log(`Dispositivo creado con id=${device.id}. Generando detecciones...`);
 

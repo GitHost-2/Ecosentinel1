@@ -32,6 +32,7 @@ export async function GET(request: Request) {
       lh.cpu_pct,
       lh.ram_pct
     from devices d
+    inner join device_owners dvo on dvo.device_id = d.id and dvo.user_id = ${userId}
     left join lateral (
       select h.timestamp as last_heartbeat, h.cpu_pct, h.ram_pct
       from device_heartbeats h
@@ -39,7 +40,6 @@ export async function GET(request: Request) {
       order by h.timestamp desc
       limit 1
     ) lh on true
-    where d.owner_user_id = ${userId}
     order by d.id
   `);
 

@@ -42,6 +42,9 @@ before(async () => {
   // Datos aislados por prefijo para no pisar nada más de la base local.
   await pool.query("delete from mitigations");
   await pool.query("delete from detections where src_ip_hash like 'test-aislar-%'");
+  await pool.query(
+    "delete from device_owners where device_id in (select id from devices where api_key_hash like 'test-aislar-%')",
+  );
   await pool.query("delete from devices where api_key_hash like 'test-aislar-%'");
   await pool.query("delete from users where email like 'test-aislar-%'");
 
@@ -63,6 +66,12 @@ before(async () => {
   );
   deviceAnaId = dev.rows[0].id;
   deviceHuerfanoId = huerfano.rows[0].id;
+
+  // Coautoría (ver db/schema.ts, deviceOwners): ANA es coautora de su
+  // dispositivo. BETO NO -- es justo lo que valida la vulnerabilidad
+  // crítica #1 (que un ajeno no pueda aislar nada de ANA). El huérfano no
+  // tiene ninguna fila aquí: nadie debe poder verlo ni operarlo.
+  await pool.query("insert into device_owners (device_id,user_id) values ($1,$2)", [deviceAnaId, anaId]);
 });
 
 after(async () => { await closePool(); });
