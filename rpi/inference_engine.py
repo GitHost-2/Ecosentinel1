@@ -155,6 +155,23 @@ DETECTION_THRESHOLD_FLOOR = 0.95
 # un sensor que se auto-reporta en bucle.
 EXCLUDED_NETWORKS = set()
 
+# Relay STUN de Raspberry Pi Connect (rpi-connectd), NO tocar ese servicio.
+# Mismo bug de fondo que el UDP-siempre-ataque del docstring de arriba: un
+# intercambio STUN son 1-2 paquetes UDP con duracion casi nula -> rate se
+# dispara -> el scaler lo satura -> el modelo lo marca "ataque" con p>0.95.
+# Detectado el 2026-08-17: rpi-connectd hace keepalive STUN cada ~10-15 min
+# contra 185.101.97.8:3478 desde que arranca, generando un "ataque" falso en
+# cada ronda (en ambas direcciones: 192.168.1.71->…:3478 y …->192.168.1.71:
+# <puerto efimero>) -- confirmado con `ss -uap` (socket de rpi-connectd) y
+# journalctl, sin relacion con el modelo ni con trafico real de la red.
+#
+# Se excluye por IP (prefijo /24, mismo mecanismo y mismo tradeoff aceptado
+# que el host de la API arriba), NO por puerto: un allowlist de "todo el
+# UDP/3478" excluiria un ataque de reflexion STUN real contra otra IP
+# (ver el comentario de is_multicast_or_broadcast() sobre por que excluir
+# por puerto solo es peligroso). Excluir por IP conocida no abre ese hueco.
+RPI_CONNECT_STUN_RELAYS = {"185.101.97.8"}
+
 # Broadcast dirigido de las subredes locales (ej. 192.168.1.255).
 # is_multicast_or_broadcast() solo cubria 255.255.255.255, pero el
 # trafico normal de descubrimiento en LAN (NetBIOS, SMB, DHCP) va al
@@ -1209,6 +1226,13 @@ def main():
                      + ", ".join(sorted(str(p) for p in prefijos)))
         except Exception as e:
             log.warning(f"No se pudo resolver el host de la API ({API_URL}) para excluirlo del analisis: {e}")
+
+    # Relay STUN de Raspberry Pi Connect -- ver RPI_CONNECT_STUN_RELAYS arriba.
+    # Se excluye siempre (no depende de --api-url): rpi-connectd corre
+    # independientemente de si el motor tiene la API configurada.
+    prefijos_stun = add_excluded_prefixes(RPI_CONNECT_STUN_RELAYS)
+    log.info(f"Relay(s) STUN de Raspberry Pi Connect excluidos del analisis: "
+             + ", ".join(sorted(str(p) for p in prefijos_stun)))
 
     if trusted_ips:
         log.info(f"IPs de confianza excluidas del analisis: {trusted_ips}")

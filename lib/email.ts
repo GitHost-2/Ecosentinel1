@@ -49,33 +49,42 @@ export async function sendAttackAlertEmail(params: {
 
   const pct = Math.round(params.attackProb * 100);
 
-  const { data, error } = await resend.emails.send({
-    from: ALERT_FROM_EMAIL,
-    to: params.to,
-    subject: `EcoSentinel detectó ${params.attackType} en ${params.deviceName}`,
-    html: `
-      <div style="font-family: -apple-system, sans-serif; max-width: 520px; margin: 0 auto; color:#1a1a1a;">
-        <h2 style="color:#C4694A; margin-bottom:4px;">Ataque detectado: ${params.attackType}</h2>
-        <p style="color:#444;">Tu dispositivo <strong>${params.deviceName}</strong> detectó un evento sospechoso en tu red.</p>
-        <table style="width:100%; border-collapse: collapse; margin: 16px 0; font-size:14px;">
-          <tr><td style="padding:6px 0; color:#666; width:140px;">Probabilidad</td><td><strong>${pct}%</strong></td></tr>
-          <tr><td style="padding:6px 0; color:#666;">Protocolo</td><td>${params.protocol}</td></tr>
-          <tr><td style="padding:6px 0; color:#666;">Puerto destino</td><td>${params.dstPort}</td></tr>
-          <tr><td style="padding:6px 0; color:#666;">Hora</td><td>${params.timestamp.toLocaleString("es-MX")}</td></tr>
-        </table>
-        <p><a href="${DASHBOARD_URL}" style="color:#2F8F86;">Ver el detalle en tu dashboard →</a></p>
-        <p style="color:#999; font-size:12px; margin-top:24px;">
-          Si hay varias detecciones seguidas no recibirás un correo por cada una (máximo uno
-          cada 10 minutos por dispositivo) — el dashboard siempre muestra el detalle completo.
-        </p>
-      </div>
-    `,
-  });
+  // El SDK de Resend devuelve {error} para fallos de la API, pero un fallo de
+  // RED (DNS, timeout) puede LANZAR en vez de resolver -- sin este try/catch
+  // esa excepción se escapa hasta el Promise.all de lib/alerts.ts sin pasar
+  // por registrarIntento(), así que no queda fila en alert_log, no hay
+  // cooldown, y la siguiente detección reintenta el mismo fallo de red.
+  try {
+    const { data, error } = await resend.emails.send({
+      from: ALERT_FROM_EMAIL,
+      to: params.to,
+      subject: `EcoSentinel detectó ${params.attackType} en ${params.deviceName}`,
+      html: `
+        <div style="font-family: -apple-system, sans-serif; max-width: 520px; margin: 0 auto; color:#1a1a1a;">
+          <h2 style="color:#C4694A; margin-bottom:4px;">Ataque detectado: ${params.attackType}</h2>
+          <p style="color:#444;">Tu dispositivo <strong>${params.deviceName}</strong> detectó un evento sospechoso en tu red.</p>
+          <table style="width:100%; border-collapse: collapse; margin: 16px 0; font-size:14px;">
+            <tr><td style="padding:6px 0; color:#666; width:140px;">Probabilidad</td><td><strong>${pct}%</strong></td></tr>
+            <tr><td style="padding:6px 0; color:#666;">Protocolo</td><td>${params.protocol}</td></tr>
+            <tr><td style="padding:6px 0; color:#666;">Puerto destino</td><td>${params.dstPort}</td></tr>
+            <tr><td style="padding:6px 0; color:#666;">Hora</td><td>${params.timestamp.toLocaleString("es-MX")}</td></tr>
+          </table>
+          <p><a href="${DASHBOARD_URL}" style="color:#2F8F86;">Ver el detalle en tu dashboard →</a></p>
+          <p style="color:#999; font-size:12px; margin-top:24px;">
+            Si hay varias detecciones seguidas no recibirás un correo por cada una (máximo uno
+            cada 10 minutos por dispositivo) — el dashboard siempre muestra el detalle completo.
+          </p>
+        </div>
+      `,
+    });
 
-  if (error) {
-    return { ok: false, error: JSON.stringify(error) };
+    if (error) {
+      return { ok: false, error: JSON.stringify(error) };
+    }
+    return { ok: true, id: data?.id };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : String(err) };
   }
-  return { ok: true, id: data?.id };
 }
 
 /**
@@ -99,38 +108,44 @@ export async function sendPasswordResetEmail(params: {
     return { ok: false, error: "RESEND_API_KEY no configurado" };
   }
 
-  const { data, error } = await resend.emails.send({
-    from: ALERT_FROM_EMAIL,
-    to: params.to,
-    subject: "Restablece tu contraseña de EcoSentinel",
-    html: `
-      <div style="font-family: -apple-system, sans-serif; max-width: 520px; margin: 0 auto; color:#1a1a1a;">
-        <h2 style="color:#2F8F86; margin-bottom:4px;">Restablece tu contraseña</h2>
-        <p style="color:#444;">
-          Recibimos una solicitud para restablecer la contraseña de tu cuenta de EcoSentinel.
-          Abre este enlace para elegir una nueva:
-        </p>
-        <p style="margin:24px 0;">
-          <a href="${params.resetUrl}"
-             style="display:inline-block; background:#2F8F86; color:#ffffff; text-decoration:none;
-                    padding:14px 24px; border-radius:10px; font-weight:600;">
-            Elegir nueva contraseña
-          </a>
-        </p>
-        <p style="color:#666; font-size:13px; word-break:break-all;">
-          Si el botón no funciona, copia y pega esta dirección en tu navegador:<br>
-          ${params.resetUrl}
-        </p>
-        <p style="color:#999; font-size:12px; margin-top:24px;">
-          El enlace caduca en ${params.expiresInMinutes} minutos y solo se puede usar una vez.
-          Si no pediste este cambio, ignora este correo: tu contraseña actual sigue funcionando.
-        </p>
-      </div>
-    `,
-  });
+  // Mismo motivo que en sendAttackAlertEmail: un fallo de red puede lanzar en
+  // vez de devolver {error}, y el llamador espera siempre un {ok, ...}.
+  try {
+    const { data, error } = await resend.emails.send({
+      from: ALERT_FROM_EMAIL,
+      to: params.to,
+      subject: "Restablece tu contraseña de EcoSentinel",
+      html: `
+        <div style="font-family: -apple-system, sans-serif; max-width: 520px; margin: 0 auto; color:#1a1a1a;">
+          <h2 style="color:#2F8F86; margin-bottom:4px;">Restablece tu contraseña</h2>
+          <p style="color:#444;">
+            Recibimos una solicitud para restablecer la contraseña de tu cuenta de EcoSentinel.
+            Abre este enlace para elegir una nueva:
+          </p>
+          <p style="margin:24px 0;">
+            <a href="${params.resetUrl}"
+               style="display:inline-block; background:#2F8F86; color:#ffffff; text-decoration:none;
+                      padding:14px 24px; border-radius:10px; font-weight:600;">
+              Elegir nueva contraseña
+            </a>
+          </p>
+          <p style="color:#666; font-size:13px; word-break:break-all;">
+            Si el botón no funciona, copia y pega esta dirección en tu navegador:<br>
+            ${params.resetUrl}
+          </p>
+          <p style="color:#999; font-size:12px; margin-top:24px;">
+            El enlace caduca en ${params.expiresInMinutes} minutos y solo se puede usar una vez.
+            Si no pediste este cambio, ignora este correo: tu contraseña actual sigue funcionando.
+          </p>
+        </div>
+      `,
+    });
 
-  if (error) {
-    return { ok: false, error: JSON.stringify(error) };
+    if (error) {
+      return { ok: false, error: JSON.stringify(error) };
+    }
+    return { ok: true, id: data?.id };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : String(err) };
   }
-  return { ok: true, id: data?.id };
 }

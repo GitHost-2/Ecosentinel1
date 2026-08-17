@@ -137,50 +137,53 @@ async function sendEmailAlert(deviceName: string, emails: string[], params: Aler
   if (emails.length === 0) return;
   if (await wasAlertedRecently(params.deviceId, "email")) return; // dentro del cooldown
 
-  await Promise.all(
-    emails.map(async (email) => {
-      const result = await sendAttackAlertEmail({
-        to: email,
-        deviceName,
-        attackType: params.attackType,
-        attackProb: params.attackProb,
-        protocol: params.protocol,
-        dstPort: params.dstPort,
-        timestamp: params.timestamp,
-      });
+  // Secuencial, NO Promise.all: con varios coautores, mandar todo a la vez
+  // dispara una ráfaga concurrente contra el límite por segundo de Resend, y
+  // un 429 ahí podría tumbar hasta el envío al destinatario que sí funciona.
+  // El costo (unos ms más por destinatario) no importa -- esto corre en
+  // after(), fuera de la respuesta al cliente.
+  for (const email of emails) {
+    const result = await sendAttackAlertEmail({
+      to: email,
+      deviceName,
+      attackType: params.attackType,
+      attackProb: params.attackProb,
+      protocol: params.protocol,
+      dstPort: params.dstPort,
+      timestamp: params.timestamp,
+    });
 
-      // Se registra SIEMPRE, también el fallo: si no, un canal averiado no
-      // tendría cooldown y se reintentaría en cada detección. Se registra por
-      // destinatario: si uno de varios coautores tiene el correo mal, no debe
-      // silenciar la alerta de los demás en la próxima detección.
-      await registrarIntento(params, "email", email, result.ok ? "sent" : "failed");
-      if (!result.ok) {
-        console.error(`[alerts] fallo al enviar correo. deviceId=${params.deviceId} to=${email}:`, result.error);
-      }
-    }),
-  );
+    // Se registra SIEMPRE, también el fallo: si no, un canal averiado no
+    // tendría cooldown y se reintentaría en cada detección. Se registra por
+    // destinatario: si uno de varios coautores tiene el correo mal, no debe
+    // silenciar la alerta de los demás en la próxima detección.
+    await registrarIntento(params, "email", email, result.ok ? "sent" : "failed");
+    if (!result.ok) {
+      console.error(`[alerts] fallo al enviar correo. deviceId=${params.deviceId} to=${email}:`, result.error);
+    }
+  }
 }
 
 async function sendWhatsappAlert(deviceName: string, phones: string[], params: AlertParams) {
   if (phones.length === 0) return; // ningún coautor puso teléfono
   if (await wasAlertedRecently(params.deviceId, "whatsapp")) return; // dentro del cooldown
 
-  await Promise.all(
-    phones.map(async (phone) => {
-      const result = await sendAttackAlertWhatsapp({
-        to: phone,
-        deviceName,
-        attackType: params.attackType,
-        attackProb: params.attackProb,
-        protocol: params.protocol,
-        dstPort: params.dstPort,
-        timestamp: params.timestamp,
-      });
+  // Secuencial por la misma razón que sendEmailAlert: evitar una ráfaga
+  // concurrente contra el límite por segundo de Twilio.
+  for (const phone of phones) {
+    const result = await sendAttackAlertWhatsapp({
+      to: phone,
+      deviceName,
+      attackType: params.attackType,
+      attackProb: params.attackProb,
+      protocol: params.protocol,
+      dstPort: params.dstPort,
+      timestamp: params.timestamp,
+    });
 
-      await registrarIntento(params, "whatsapp", phone, result.ok ? "sent" : "failed");
-      if (!result.ok) {
-        console.error(`[alerts] fallo al enviar whatsapp. deviceId=${params.deviceId} to=${phone}:`, result.error);
-      }
-    }),
-  );
+    await registrarIntento(params, "whatsapp", phone, result.ok ? "sent" : "failed");
+    if (!result.ok) {
+      console.error(`[alerts] fallo al enviar whatsapp. deviceId=${params.deviceId} to=${phone}:`, result.error);
+    }
+  }
 }

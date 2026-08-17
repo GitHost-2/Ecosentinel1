@@ -183,12 +183,31 @@ interface FastEthernet0/11
  no shutdown
 exit
 
+! --- Puerto del servidor DHCP (esta laptop) en VLAN 99 ---
+! Usado por network/topologia-cisco/dhcp-server-ecosentinel.sh: sirve las
+! 4 subredes via 'ip helper-address 192.168.99.10' en cada subinterfaz del
+! router (ver config-router.txt). Sin este puerto en VLAN 99, el DHCP
+! relay no tiene por donde llegar al servidor.
+interface FastEthernet0/6
+ description ACCESO-VLAN99-DHCP-SERVER-LAPTOP
+ switchport mode access
+ switchport access vlan 99
+ switchport port-security
+ switchport port-security maximum 1
+ switchport port-security mac-address sticky
+ switchport port-security violation restrict
+ spanning-tree portfast
+ spanning-tree bpduguard enable
+ no shutdown
+exit
+
 ! =====================================================================
 ! 6. Puertos NO USADOS: apagados y enviados al blackhole (VLAN 999)
 !    (doc, seccion 3.2: "desactivacion de servicios innecesarios" / minimo
-!     privilegio). Rango de ejemplo Fa0/6-9 y Fa0/12-24 + Gig0/1-2.
+!     privilegio). Rango de ejemplo Fa0/7-9 y Fa0/12-24 + Gig0/1-2.
+!    (Fa0/6 se saco de este rango: es el puerto del servidor DHCP, arriba.)
 ! =====================================================================
-interface range FastEthernet0/6 - 9
+interface range FastEthernet0/7 - 9
  description NO-USADO
  switchport mode access
  switchport access vlan 999

@@ -120,7 +120,17 @@ before(async () => {
   await pool.query("delete from users where email like 'test-reset-%'");
   // Los tests de mitigate.test.ts ya usan sus propias claves; limpiamos solo
   // los buckets de este archivo para no interferir con los suyos.
-  await pool.query("delete from rate_limit_counters where bucket_key like 'forgot:%test-reset%' or bucket_key like 'reset:%'");
+  //
+  // El cubo por CORREO ('forgot:%test-reset%') queda cubierto porque el
+  // correo de prueba lleva ese prefijo. El cubo por IP NO: forgotRequest()
+  // usa IPs fijas (203.0.113.0/24) que no cambian entre corridas, así que
+  // sin limpiarlas, correr `npm test` más de RL_FORGOT_IP_LIMIT (5) veces en
+  // 15 min hace que el límite por IP se dispare aunque cada prueba mande una
+  // sola petición -- un fallo intermitente que no tiene nada que ver con lo
+  // que se está probando (confirmado el 2026-08-17: exactamente ese patrón).
+  await pool.query(
+    "delete from rate_limit_counters where bucket_key like 'forgot:%test-reset%' or bucket_key like 'reset:%' or bucket_key like 'forgot:ip:203.0.113.%'",
+  );
 
   const ana = await pool.query(
     "insert into users (company,email,password_hash) values ('Ana Reset','" + ANA_EMAIL + "','hash-original') returning id",

@@ -68,6 +68,7 @@ interface GigabitEthernet0/1.10
  encapsulation dot1Q 10
  ip address 192.168.10.1 255.255.255.0
  ip access-group ACL-ADMIN in
+ ip helper-address 192.168.99.10
 exit
 
 ! --- VLAN 20: Red de usuarios (gateway .1) ---
@@ -76,6 +77,7 @@ interface GigabitEthernet0/1.20
  encapsulation dot1Q 20
  ip address 192.168.20.1 255.255.255.0
  ip access-group ACL-USUARIOS in
+ ip helper-address 192.168.99.10
 exit
 
 ! --- VLAN 30: Red IoT (gateway .1) ---
@@ -84,6 +86,7 @@ interface GigabitEthernet0/1.30
  encapsulation dot1Q 30
  ip address 192.168.30.1 255.255.255.0
  ip access-group ACL-IOT in
+ ip helper-address 192.168.99.10
 exit
 
 ! --- VLAN 40: Red de invitados (gateway .1) ---
@@ -92,6 +95,7 @@ interface GigabitEthernet0/1.40
  encapsulation dot1Q 40
  ip address 192.168.40.1 255.255.255.0
  ip access-group ACL-INVITADOS in
+ ip helper-address 192.168.99.10
 exit
 
 ! --- VLAN 99: Gestion (gateway .1) ---

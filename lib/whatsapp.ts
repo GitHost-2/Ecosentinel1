@@ -37,18 +37,28 @@ export async function sendAttackAlertWhatsapp(params: {
     Body: body,
   });
 
-  const res = await fetch(`https://api.twilio.com/2010-04-01/Accounts/${TWILIO_ACCOUNT_SID}/Messages.json`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/x-www-form-urlencoded",
-      Authorization: "Basic " + Buffer.from(`${TWILIO_ACCOUNT_SID}:${TWILIO_AUTH_TOKEN}`).toString("base64"),
-    },
-    body: form,
-  });
+  // El fetch puede LANZAR (DNS, timeout, red caída) en vez de solo devolver
+  // un !res.ok -- sin este try/catch, esa excepción se propaga hasta el
+  // Promise.all de lib/alerts.ts sin pasar por registrarIntento(), así que no
+  // queda fila en alert_log, no hay cooldown, y la siguiente detección
+  // reintenta el mismo fallo de red -- el mismo patrón que el incidente de
+  // "91 llamadas fallidas en segundos" que el cooldown existe para evitar.
+  try {
+    const res = await fetch(`https://api.twilio.com/2010-04-01/Accounts/${TWILIO_ACCOUNT_SID}/Messages.json`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded",
+        Authorization: "Basic " + Buffer.from(`${TWILIO_ACCOUNT_SID}:${TWILIO_AUTH_TOKEN}`).toString("base64"),
+      },
+      body: form,
+    });
 
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok) {
-    return { ok: false, error: data.message || `Twilio respondió ${res.status}` };
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      return { ok: false, error: data.message || `Twilio respondió ${res.status}` };
+    }
+    return { ok: true, sid: data.sid };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : String(err) };
   }
-  return { ok: true, sid: data.sid };
 }
