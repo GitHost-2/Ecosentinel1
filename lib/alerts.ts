@@ -46,18 +46,38 @@ type AlertParams = {
 };
 
 /**
- * Se consulta el último intento del canal SIN filtrar por fecha en el SQL: la
- * ventana depende de si ese intento salió bien o mal, así que primero hay que
- * saber su `status` y luego decidir.
+ * Se miran el ÚLTIMO envío CON ÉXITO y el ÚLTIMO envío FALLIDO por separado
+ * -- NO "la fila más reciente de cualquier tipo, sin más".
+ *
+ * Por qué: desde [[Coautoría de dispositivos]] (deviceOwners), una ronda de
+ * alertas manda a VARIOS destinatarios en paralelo (`Promise.all`), y cada
+ * uno escribe su propia fila en `alert_log` casi al mismo tiempo. Con "toma
+ * la fila más reciente por sent_at", cuál de esas filas casi-simultáneas
+ * queda "la más reciente" es una carrera -- si un coautor falla (ej. Resend
+ * en sandbox rechaza a cualquiera que no sea el dueño) y otro tiene éxito,
+ * la ventana del dispositivo entero oscilaba de forma no determinista entre
+ * los 10 min de un envío OK y los 2 min de un fallo.
+ *
+ * Con éxito y fallo mirados por separado: si CUALQUIERA tuvo éxito hace
+ * poco, se calla los 10 min completos (ver isWithinCooldown); el fallo solo
+ * manda si no hay ningún éxito reciente que lo tape.
  */
 async function wasAlertedRecently(deviceId: number, channel: "email" | "whatsapp") {
-  const [lastAlert] = await db
+  const [ultimoOk] = await db
     .select({ sentAt: alertLog.sentAt, status: alertLog.status })
     .from(alertLog)
-    .where(and(eq(alertLog.deviceId, deviceId), eq(alertLog.channel, channel)))
+    .where(and(eq(alertLog.deviceId, deviceId), eq(alertLog.channel, channel), eq(alertLog.status, "sent")))
     .orderBy(desc(alertLog.sentAt))
     .limit(1);
-  return isWithinCooldown(lastAlert ?? null);
+  if (isWithinCooldown(ultimoOk ?? null)) return true;
+
+  const [ultimoFallo] = await db
+    .select({ sentAt: alertLog.sentAt, status: alertLog.status })
+    .from(alertLog)
+    .where(and(eq(alertLog.deviceId, deviceId), eq(alertLog.channel, channel), eq(alertLog.status, "failed")))
+    .orderBy(desc(alertLog.sentAt))
+    .limit(1);
+  return isWithinCooldown(ultimoFallo ?? null);
 }
 
 /** Deja constancia del intento, haya salido bien o mal. Nunca lanza: un fallo aquí no debe tumbar la ingesta. */
