@@ -1145,7 +1145,9 @@ def run_live(interface, model, threshold, scaler, features, debug=False, trusted
 def main():
     parser = argparse.ArgumentParser(description="EcoSentinel — Motor de inferencia")
     parser.add_argument("--validate", metavar="PCAP", help="Validar contra un .pcap")
-    parser.add_argument("--live", metavar="IFACE", help="Captura en vivo en una interfaz")
+    parser.add_argument("--live", metavar="IFACE",
+                         help="Captura en vivo en una interfaz (en el servicio systemd "
+                              "se fija con ECOSENTINEL_LIVE_IFACE en .env.ecosentinel)")
     parser.add_argument("--debug", action="store_true", help="Log detallado de saturacion de rate y flujos marcados ataque")
     parser.add_argument("--trusted-ips", default="",
                          help="IPs de confianza separadas por coma a excluir del analisis "

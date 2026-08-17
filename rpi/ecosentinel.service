@@ -15,7 +15,18 @@ EnvironmentFile=/home/rpi/ecosentinel/.env.ecosentinel
 # Al mover la RPi de red (casa -> laboratorio) el DHCP le da otra IP a la laptop
 # de administracion: ahi es donde se actualiza. Si falta, el motor lo avisa en
 # el arranque en vez de callarselo.
-ExecStart=/home/rpi/ecosentinel/.venv/bin/python3 /home/rpi/ecosentinel/inference_engine.py --live wlan0
+#
+# Misma razon para la interfaz de captura: ECOSENTINEL_LIVE_IFACE en
+# .env.ecosentinel (systemd la sustituye aqui via EnvironmentFile). Hoy es
+# wlan0 (cliente WiFi: solo ve su propio trafico + broadcast). Si se conecta
+# un adaptador USB-Ethernet al puerto SPAN del switch (Fa0/10, ver
+# network/topologia-cisco/), cambia esa variable al nombre real de la nueva
+# interfaz (`ip link` para verlo, normalmente eth0) y reinicia el servicio —
+# sin tocar este unit ni remontar la SD. No hace falta forzar modo
+# promiscuo aparte: scapy.sniff() ya abre la interfaz en promiscuo por
+# defecto (conf.sniff_promisc=True), y el binario de python ya tiene
+# cap_net_raw/cap_net_admin via setcap (ver setup_rpi.sh).
+ExecStart=/home/rpi/ecosentinel/.venv/bin/python3 /home/rpi/ecosentinel/inference_engine.py --live ${ECOSENTINEL_LIVE_IFACE}
 Restart=on-failure
 RestartSec=5
 MemoryHigh=300M

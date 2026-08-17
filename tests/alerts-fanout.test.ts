@@ -1,5 +1,5 @@
 /**
- * Cooldown de alertas con VARIOS destinatarios (lib/alerts.ts).
+ * Fan-out de alertas a VARIOS destinatarios (lib/alerts.ts).
  *
  * Bug real encontrado el 2026-08-16 al revisar el fan-out a coautores
  * ([[Coautoría de dispositivos]]): `wasAlertedRecently()` tomaba "la fila
@@ -7,21 +7,22 @@
  * coautores, `maybeSendAttackAlert` manda a todos en paralelo
  * (`Promise.all`), así que un envío CON ÉXITO y uno FALLIDO casi simultáneos
  * pueden escribir sus filas en cualquier orden -- cuál queda "más reciente"
- * era una carrera, y si ganaba la fila `failed`, el dispositivo entero
- * pasaba a reintentar cada 2 min en vez de cada 10, aunque alguien SÍ
- * hubiera recibido la alerta.
+ * era una carrera. El fix: mirar el último envío CON ÉXITO y el último
+ * FALLIDO por separado. Esa lógica de `wasAlertedRecently` sigue en el
+ * código sin cambios.
  *
- * El fix: mirar el último envío CON ÉXITO y el último FALLIDO por
- * separado -- si cualquiera tuvo éxito hace poco, se calla 10 min
- * completos, sin importar si hay un fallo más reciente todavía.
+ * 🔴 2026-08-17: por petición explícita del usuario, ALERT_COOLDOWN_MS y
+ * FAILURE_COOLDOWN_MS quedaron en 0 -- ver lib/alerts.ts. Con ventana 0,
+ * `isWithinCooldown` siempre devuelve false sin importar qué haya en
+ * alert_log, así que la carrera de arriba ya no es observable: CUALQUIER
+ * detección dispara un intento nuevo, gane quien gane la carrera. Las
+ * pruebas de abajo reflejan ese estado actual (siempre se agrega fila
+ * nueva); si se vuelve a activar el cooldown, deben revertirse a esperar
+ * que NO se agregue fila nueva dentro de la ventana.
  *
  * Corre contra el Postgres LOCAL de pruebas (ver tests/db-local.ts). Sin
  * RESEND_API_KEY/TWILIO_* configuradas (tests/setup-env.ts no las pone), TODO
- * intento real que haga maybeSendAttackAlert falla y escribe 'failed' -- eso
- * es justo lo que permite probar la suspensión sin credenciales reales: se
- * siembra un 'sent' reciente a mano (simulando una ronda previa donde SÍ
- * hubo éxito) y se confirma que una detección nueva NO agrega filas nuevas,
- * aunque también se siembre un 'failed' más reciente todavía (la carrera).
+ * intento real que haga maybeSendAttackAlert falla y escribe 'failed'.
  *
  * Cada prueba usa su PROPIO dispositivo: `maybeSendAttackAlert` dispara
  * SIEMPRE los dos canales (email y whatsapp) a la vez, así que reusar un
@@ -111,12 +112,12 @@ async function dispara(deviceId: number, detectionId: number) {
 }
 
 prueba(
-  "EL BUG: un 'sent' reciente sigue callando el canal aunque haya un 'failed' MÁS reciente todavía",
+  "sin cooldown: un 'sent' reciente YA NO calla el canal, ni con un 'failed' más reciente todavía",
   async (deviceId) => {
     const idDeteccion = await nuevaDeteccion(deviceId);
 
-    // Simula la ronda anterior: un coautor tuvo éxito hace 30s, otro falló
-    // hace apenas 5s (el fallo es el más reciente de los dos -- la carrera).
+    // Misma ronda anterior que antes disparaba la carrera: un coautor tuvo
+    // éxito hace 30s, otro falló hace apenas 5s.
     await pool.query(
       `insert into alert_log (device_id,detection_id,channel,recipient,status,sent_at)
        values ($1,$2,'email','ok@ejemplo.test','sent', now() - interval '30 seconds')`,
@@ -134,15 +135,14 @@ prueba(
     await dispara(deviceId, idDeteccion);
 
     const despues = await filasAlertLog(deviceId, "email");
-    assert.equal(
-      despues.length,
-      2,
-      "el 'sent' de hace 30s debe callar el canal 10 min completos, sin importar que el 'failed' sea más reciente",
+    assert.ok(
+      despues.length > antes.length,
+      "con ALERT_COOLDOWN_MS=0, la nueva detección debe intentar el envío pase lo que pase en alert_log",
     );
   },
 );
 
-prueba("sin ningún 'sent' reciente, un 'failed' reciente sigue frenando (ventana corta)", async (deviceId) => {
+prueba("sin cooldown: un 'failed' reciente YA NO frena el reintento", async (deviceId) => {
   const idDeteccion = await nuevaDeteccion(deviceId);
 
   await pool.query(
@@ -157,10 +157,10 @@ prueba("sin ningún 'sent' reciente, un 'failed' reciente sigue frenando (ventan
   await dispara(deviceId, idDeteccion);
 
   const despues = await filasAlertLog(deviceId, "whatsapp");
-  assert.equal(despues.length, 1, "un fallo de hace 5s sigue dentro del cooldown corto (2 min): no debe reintentar");
+  assert.ok(despues.length > antes.length, "con FAILURE_COOLDOWN_MS=0, un fallo de hace 5s debe reintentar igual");
 });
 
-prueba("pasada la ventana corta del fallo, sin ningún 'sent' reciente, sí se reintenta", async (deviceId) => {
+prueba("sin cooldown: detecciones seguidas sin ningún intento previo siempre reintentan", async (deviceId) => {
   const idDeteccion = await nuevaDeteccion(deviceId);
 
   await pool.query(
@@ -172,5 +172,5 @@ prueba("pasada la ventana corta del fallo, sin ningún 'sent' reciente, sí se r
   await dispara(deviceId, idDeteccion);
 
   const despues = await filasAlertLog(deviceId, "whatsapp");
-  assert.ok(despues.length >= 2, "a los 2 min de un fallo, sin ningún éxito reciente, debe reintentar");
+  assert.ok(despues.length >= 2, "sin cooldown, un fallo de hace más de 2 min también debe reintentar");
 });

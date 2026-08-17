@@ -4,16 +4,17 @@ import { devices, deviceOwners, users, alertLog } from "@/db/schema";
 import { sendAttackAlertEmail } from "@/lib/email";
 import { sendAttackAlertWhatsapp } from "@/lib/whatsapp";
 
-// Máximo una alerta cada 10 min por dispositivo Y por canal (evita ráfagas de alertas).
-export const ALERT_COOLDOWN_MS = 10 * 60 * 1000;
+// SIN cooldown, a petición explícita del usuario (2026-08-17): quiere una
+// alerta por CADA detección, sin excepción. Antes eran 10 min / 2 min --
+// riesgo ya conocido y aceptado: un escaneo de puertos manda ~91 correos y
+// whatsapps en segundos (ver tests/alerts-cooldown.test.ts y la nota
+// "Cooldown de alertas" de la documentación), y Resend en sandbox los
+// entrega todos al mismo buzón porque solo puede mandar al dueño de la
+// cuenta. Para volver a limitarlo: ALERT_COOLDOWN_MS = 10 * 60 * 1000.
+export const ALERT_COOLDOWN_MS = 0;
 
-// Ventana tras un intento FALLIDO. Es más corta a propósito: si el fallo fue
-// transitorio (un timeout del proveedor), esperar los 10 min completos
-// retrasaría demasiado la alerta de un ataque real. Y es lo bastante larga para
-// que un canal averiado no se reintente en cada detección — que es justo lo que
-// pasaba antes de registrar los fallos: 91 llamadas a Resend en segundos
-// durante una prueba de escaneo de puertos.
-export const FAILURE_COOLDOWN_MS = 2 * 60 * 1000;
+// Ídem para la ventana tras un intento FALLIDO -- ver arriba.
+export const FAILURE_COOLDOWN_MS = 0;
 
 export type AlertStatus = "sent" | "failed";
 
