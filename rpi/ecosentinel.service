@@ -9,7 +9,13 @@ User=rpi
 Group=rpi
 WorkingDirectory=/home/rpi/ecosentinel
 EnvironmentFile=/home/rpi/ecosentinel/.env.ecosentinel
-ExecStart=/home/rpi/ecosentinel/.venv/bin/python3 /home/rpi/ecosentinel/inference_engine.py --live wlan0 --trusted-ips 192.168.1.75
+# Las IPs de confianza NO van aqui: este unit vive en la capa SD (overlayroot),
+# asi que cambiarlas obligaria a remontar la SD y reiniciar la RPi. Van en
+# ECOSENTINEL_TRUSTED_IPS dentro de .env.ecosentinel, que se edita en caliente.
+# Al mover la RPi de red (casa -> laboratorio) el DHCP le da otra IP a la laptop
+# de administracion: ahi es donde se actualiza. Si falta, el motor lo avisa en
+# el arranque en vez de callarselo.
+ExecStart=/home/rpi/ecosentinel/.venv/bin/python3 /home/rpi/ecosentinel/inference_engine.py --live wlan0
 Restart=on-failure
 RestartSec=5
 MemoryHigh=300M

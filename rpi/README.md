@@ -3,33 +3,56 @@
 Código que corre **en el dispositivo**, no en Vercel. Se versiona aquí porque
 antes vivía solo en la RPi y no había copia en ningún repositorio.
 
-## ⚠️ La RPi borra sus cambios al reiniciar
+## ⚠️ Un `scp` normal a la RPi se pierde al reiniciar
 
 El arranque lleva `overlayroot=tmpfs` en el cmdline del kernel:
 
 ```
-/media/root-ro   /dev/mmcblk0p2   ext4 (ro)   <- la tarjeta SD, SOLO LECTURA
+/media/root-ro   /dev/mmcblk0p2   ext4 (ro)   <- la tarjeta SD, capa PERSISTENTE
 /media/root-rw   tmpfs                        <- capa de escritura EN RAM
 /                overlay
 ```
 
-Todo lo que se escriba en el sistema de archivos vive en RAM y **desaparece en
-cada reinicio**, volviendo a la imagen de la SD. Esto ya causó que un fix de
-privacidad (el hashing de IP) se perdiera dos veces sin que nadie lo tocara.
+Todo lo que se escriba en `/` vive en RAM y **desaparece en cada reinicio**,
+volviendo a la imagen de la SD. Esto ya causó que un fix de privacidad (el
+hashing de IP) se perdiera dos veces sin que nadie lo tocara.
 
-Mientras siga así, después de cada reinicio hay que volver a subir estos
-archivos (hay un script listo en `~/Desktop/backup/RESTAURAR.sh`):
+**`overlayroot` se mantiene a propósito** — protege la SD contra corrupción por
+corte de luz, que es la razón legítima de tenerlo en un appliance. Lo que se
+resolvió (2026-07-30) es cómo escribir *a través* de él: hay que copiar el
+archivo a la capa SD, no al overlay.
 
 ```bash
-scp rpi/inference_engine.py rpi@192.168.1.71:~/ecosentinel/
-scp rpi/ecosentinel.service rpi@192.168.1.71:/tmp/
-ssh rpi@192.168.1.71 "sudo cp /tmp/ecosentinel.service /etc/systemd/system/ && \
-  sudo systemctl daemon-reload && sudo systemctl restart ecosentinel"
+# La IP cambia con el DHCP: usa el nombre mDNS, no una IP fija.
+RPI=ecosentinel.local
+
+# 1. subir a /tmp (esto sí vive solo en RAM, y está bien: es un tránsito)
+scp rpi/inference_engine.py rpi@$RPI:/tmp/
+
+# 2. grabarlo en la capa persistente (la SD)
+ssh rpi@$RPI "sudo sh -c '
+  mount -o remount,rw /media/root-ro
+  install -o 1000 -g 1000 -m 644 /tmp/inference_engine.py \
+      /media/root-ro/home/rpi/ecosentinel/inference_engine.py
+  sync'"
+
+# 3. reiniciar la RPi y verificar
 ```
 
-Para hacerlo permanente hay que quitar `overlayroot=tmpfs` del cmdline o escribir
-en la capa de solo-lectura. **Ninguna de las dos se ha hecho**: un error ahí puede
-dejar el dispositivo sin arrancar, así que requiere decisión del dueño.
+Tres cautelas que ya costaron caro:
+
+1. **Comparar el md5 en los tres puntos** (laptop → `/tmp` → archivo escrito)
+   antes de reiniciar. Sin eso, la RPi corrió durante días un motor distinto al
+   del repo sin que nadie lo notara.
+2. El `remount,ro` en caliente **no funciona** sobre `/media/root-ro` (`EBUSY`:
+   el overlay la tiene como `lowerdir`). La SD queda en `rw` hasta el siguiente
+   reinicio — reiniciar cuanto antes.
+3. **Dejar el motor corriendo ≥2 minutos** antes de dar el cambio por bueno: un
+   `UnboundLocalError` que solo aparecía en el primer heartbeat pasó
+   desapercibido por comprobar demasiado pronto.
+
+Para probar algo sin tocar la SD, un `scp` normal a `~/ecosentinel/` sirve: se
+revierte solo en el siguiente reinicio.
 
 ## Uso
 
@@ -37,15 +60,41 @@ dejar el dispositivo sin arrancar, así que requiere decisión del dueño.
 # Validar contra una captura
 python3 inference_engine.py --validate captura.pcap
 
-# Producción (así lo lanza systemd)
-sudo python3 inference_engine.py --live wlan0 --trusted-ips 192.168.1.75
+# Producción (así lo lanza systemd; las IPs de confianza vienen del entorno)
+sudo python3 inference_engine.py --live wlan0
 
 # Probar otro umbral sin editar código
 sudo python3 inference_engine.py --live wlan0 --threshold 0.90 --debug
 ```
 
 Configuración por entorno (`/home/rpi/ecosentinel/.env.ecosentinel`, **no se
-versiona**): `ECOSENTINEL_API_URL`, `ECOSENTINEL_API_KEY`.
+versiona**):
+
+| Variable | Para qué |
+|---|---|
+| `ECOSENTINEL_API_URL` | URL base de la API (Vercel) |
+| `ECOSENTINEL_API_KEY` | API key de ESTE dispositivo |
+| `ECOSENTINEL_TRUSTED_IPS` | IPs de administración a excluir, separadas por coma |
+
+`ECOSENTINEL_TRUSTED_IPS` **no** va en el unit de systemd a propósito: el unit
+vive en la capa SD (ver arriba), así que cambiar una IP ahí obliga a remontar la
+SD y reiniciar la RPi entera. `.env.ecosentinel` no está en esa capa, y la IP de
+la laptop de administración **cambia** al mover la RPi de red — el DHCP del
+laboratorio no le dará la misma que en casa. Con esto, adaptarla es editar una
+línea y `systemctl restart ecosentinel`.
+
+```bash
+# En el laboratorio, antes de la demo: averigua la IP real de la laptop
+ip -4 addr show wlan0 | grep inet
+ssh rpi@ecosentinel.local "sudo sed -i 's/^ECOSENTINEL_TRUSTED_IPS=.*/ECOSENTINEL_TRUSTED_IPS=<IP>/' \
+  ~/ecosentinel/.env.ecosentinel && sudo systemctl restart ecosentinel"
+ssh rpi@ecosentinel.local "journalctl -u ecosentinel -n 30 | grep -i confianza"
+```
+
+`--trusted-ips` sigue existiendo y **se suma** a la variable, para una corrida
+puntual sin tocar el entorno. Si no hay ninguna configurada, el motor lo avisa
+en el arranque: sin ella, el propio tráfico SSH de administración alimenta al
+clasificador y genera falsos positivos.
 
 ## Qué se excluye del análisis y por qué
 
@@ -102,8 +151,10 @@ Prueba: `tests/test_arp_detection.py` (7 casos, biblioteca estándar). Corre con
 
 1. `hash_ip()` — HMAC-SHA256 de la IP con `.device_salt` local. Un `sha256(ip)`
    sin secreto es reversible por fuerza bruta (el espacio IPv4 son ~4.300
-   millones de valores). **El salt también se borra al reiniciar**, así que el
-   hash de una misma IP cambia entre reinicios.
+   millones de valores). El salt vive en la capa SD desde el 2026-07-30, así que
+   el hash de una misma IP es **estable entre reinicios** y ya se puede
+   correlacionar a un mismo atacante. Nunca se transmite y nunca se versiona
+   (está en `.gitignore`: este repo es público).
 2. Puertos 22/21/3389 → "Brute Force". Antes la regla exigía `syn>0 and ack==0`,
    así que una sesión SSH ya establecida no matcheaba nada y caía al default
    genérico "DDoS".

@@ -11,7 +11,8 @@ Uso:
     sudo python3 inference_engine.py --live wlan0 --trusted-ips 192.168.1.75 \\
         --api-url https://tu-dominio.vercel.app --api-key <API_KEY_del_dispositivo>
 
-    (o exporta ECOSENTINEL_API_URL / ECOSENTINEL_API_KEY en vez de --api-url/--api-key)
+    (o exporta ECOSENTINEL_API_URL / ECOSENTINEL_API_KEY / ECOSENTINEL_TRUSTED_IPS
+     en vez de --api-url/--api-key/--trusted-ips)
 """
 import os
 import sys
@@ -171,6 +172,29 @@ def _prefix_for(ip_str):
     return ipaddress.ip_network(f"{ip_str}/{suffix}", strict=False)
 
 
+def parse_trusted_ips(raw):
+    """Lista separada por comas -> set de IPs validas.
+
+    Descarta lo que no sea una IP y lo dice: una errata en
+    `.env.ecosentinel` (un hostname, un espacio de mas, una IP a medias)
+    no debe pasar silenciosamente como "IP de confianza" que nunca
+    matchea -- el sintoma seria una lluvia de falsos positivos del canal
+    de administracion, con la causa escondida en un archivo de entorno.
+    """
+    validas = set()
+    for item in (raw or "").split(","):
+        ip = item.strip()
+        if not ip:
+            continue
+        try:
+            ipaddress.ip_address(ip)
+        except ValueError:
+            log.warning(f"IP de confianza invalida, se ignora: {ip!r}")
+            continue
+        validas.add(ip)
+    return validas
+
+
 def add_excluded_prefixes(ips):
     """Agrega el prefijo que contiene cada IP. Devuelve los prefijos nuevos."""
     nuevos = set()
@@ -221,6 +245,12 @@ def get_local_broadcasts():
 # modelo multiclase real entrenado sobre datos etiquetados por familia.
 API_URL = os.environ.get("ECOSENTINEL_API_URL", "").rstrip("/")
 API_KEY = os.environ.get("ECOSENTINEL_API_KEY", "")
+# IPs de confianza por entorno, alternativa a --trusted-ips. Existe porque el
+# unit de systemd vive en la capa SD (overlayroot): cambiar una IP ahi obliga a
+# remontar la SD y reiniciar la RPi. `.env.ecosentinel` NO esta en esa capa, asi
+# que mover la red de la laptop de administracion (casa -> laboratorio, donde el
+# DHCP le da otra IP) pasa a ser editar un archivo y reiniciar el servicio.
+API_TRUSTED_IPS = os.environ.get("ECOSENTINEL_TRUSTED_IPS", "")
 HTTP_TIMEOUT = 5           # segundos, no bloquear la captura si la API tarda
 HEARTBEAT_INTERVAL = 60    # segundos entre heartbeats
 MODELO_VERSION = "rf-binary-v1"  # ajustar si se reentrena/reemplaza el modelo
@@ -1102,7 +1132,8 @@ def main():
     parser.add_argument("--debug", action="store_true", help="Log detallado de saturacion de rate y flujos marcados ataque")
     parser.add_argument("--trusted-ips", default="",
                          help="IPs de confianza separadas por coma a excluir del analisis "
-                              "(ej. tu laptop de administracion): --trusted-ips 192.168.1.75,192.168.1.10")
+                              "(ej. tu laptop de administracion): --trusted-ips 192.168.1.75,192.168.1.10. "
+                              "Se SUMAN a las de ECOSENTINEL_TRUSTED_IPS")
     parser.add_argument("--api-url", default="", help="URL base de la API (o ECOSENTINEL_API_URL)")
     parser.add_argument("--api-key", default="", help="API key del dispositivo (o ECOSENTINEL_API_KEY)")
     parser.add_argument("--threshold", type=float, default=None,
@@ -1126,7 +1157,21 @@ def main():
     if args.api_key:
         API_KEY = args.api_key
 
-    trusted_ips = {ip.strip() for ip in args.trusted_ips.split(",") if ip.strip()}
+    # --trusted-ips y ECOSENTINEL_TRUSTED_IPS se SUMAN (no se pisan): el flag
+    # sirve para una corrida puntual sin tocar el entorno, y el entorno para la
+    # configuracion permanente del servicio -- ver API_TRUSTED_IPS arriba.
+    trusted_ips = parse_trusted_ips(args.trusted_ips) | parse_trusted_ips(API_TRUSTED_IPS)
+
+    # Sin ninguna IP de administracion, el trafico SSH del operador hacia esta
+    # misma RPi alimenta al clasificador y genera falsos positivos (rafagas
+    # cortas, nada parecido al benigno IoT de CIC-IoT2023). Es exactamente lo
+    # que pasa al mover la RPi a otra red sin actualizar la IP de la laptop, asi
+    # que se avisa fuerte en vez de arrancar en silencio.
+    if args.live and not trusted_ips:
+        log.warning("Ninguna IP de confianza configurada: el trafico de "
+                    "administracion (SSH) se analizara y puede dar falsos "
+                    "positivos. Fija ECOSENTINEL_TRUSTED_IPS en "
+                    ".env.ecosentinel o pasa --trusted-ips.")
 
     # El/los resolver(es) DNS del propio sistema (/etc/resolv.conf) tampoco
     # deben alimentar al clasificador: CADA resolucion DNS (la del sensor
